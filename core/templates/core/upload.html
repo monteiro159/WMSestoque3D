@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Upload de Estoque</title>
+    <style>
+        body { background-color: #1a202c; color: #e2e8f0; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background-color: #2d3748; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 400px; }
+        h2 { color: #fff; margin-top: 0; }
+        button { background-color: #48bb78; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
+        button:hover { background-color: #38a169; }
+        input, select { width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #4a5568; background: #1a202c; color: white; }
+        .alert { padding: 10px; background-color: #c53030; color: white; margin-bottom: 15px; border-radius: 4px; }
+        .success { background-color: #2f855a; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>📥 Importar Estoque</h2>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert {% if message.tags == 'success' %}success{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit">Processar Arquivo</button>
+        </form>
+    </div>
+</body>
+</html>

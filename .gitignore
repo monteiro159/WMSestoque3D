@@ -1,0 +1,19 @@
+# Arquivos do sistema e cache
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# Banco de dados (Não sobe pro GitHub, pois muda o tempo todo)
+db.sqlite3
+
+# Ambientes Virtuais
+venv/
+env/
+.env
+
+# Arquivos de mídia/uploads (Opcional, se quiser manter o repo leve)
+# media/
+
+# VS Code
+.vscode/

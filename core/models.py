@@ -26,7 +26,29 @@ class LayoutArmazem(models.Model):
 
     def __str__(self):
         return f"Rua {self.rua} (GP {self.gp}) - Cap: {self.cap_maxima}"
+    
+class Produto(models.Model):
+    # Identificação Básica
+    sku = models.CharField(max_length=20, primary_key=True, verbose_name="SKU")
+    descricao = models.CharField(max_length=200, verbose_name="Produto")
+    familia = models.CharField(max_length=100, null=True, blank=True, verbose_name="Família")
+    tipo = models.CharField(max_length=50, null=True, blank=True, verbose_name="Tipo") # PA, INSUMO, RPM
+    
+    # Validade
+    shelf_life_dias = models.IntegerField(default=0, verbose_name="Shelf Life (Dias)")
+    
+    # Dados Logísticos
+    unidade_por_pack = models.IntegerField(default=1, verbose_name="Unid/Pack")
+    embalagem_geral = models.CharField(max_length=100, null=True, blank=True, verbose_name="Emb. Geral")
+    paletizacao = models.IntegerField(default=0, verbose_name="Paletização (Packs/Pal)")
+    empilhamento_max = models.IntegerField(default=1, verbose_name="Empilhamento Máx")
 
+    def __str__(self):
+        return f"{self.sku} - {self.descricao}"
+
+    class Meta:
+        verbose_name = "Cadastro Mestre (Produto)"
+        verbose_name_plural = "Cadastro Mestre (Produtos)"
 
 # --- PARTE 2: INVENTÁRIO DIÁRIO (O QUE VEM DO EXCEL) ---
 class InventarioDiario(models.Model):

@@ -1,0 +1,127 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>A LUSITANA - Radar FEFO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans selection:bg-amber-500 selection:text-white">
+
+    <nav class="bg-slate-900/90 border-b border-slate-700 sticky top-0 z-50 backdrop-blur-md">
+        <div class="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <a href="{% url 'dashboard' 1 %}" class="flex items-center gap-3 hover:opacity-80 transition">
+                    <img src="{% static 'core/logo.jpg' %}" class="w-10 h-10 rounded-full border border-amber-500/50">
+                    <h1 class="font-bold text-lg tracking-wider flex flex-col md:block">
+                        SHELF-LIFE FEFO 
+                        <span class="text-[10px] text-amber-500 font-normal md:ml-2">Controle de Validade (PA)</span>
+                    </h1>
+                </a>
+            </div>
+            <a href="{% url 'dashboard' 1 %}" class="text-sm text-slate-400 hover:text-white transition flex items-center gap-2">
+                <i class="fa-solid fa-arrow-left"></i> Voltar ao Mapa
+            </a>
+        </div>
+    </nav>
+
+    <div class="max-w-[1600px] mx-auto p-6 space-y-6">
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            
+            <a href="?status=vencido" class="group bg-slate-800 rounded-xl p-4 border border-slate-700 hover:border-rose-500/50 transition relative overflow-hidden">
+                <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition text-6xl text-rose-500"><i class="fa-solid fa-skull-crossbones"></i></div>
+                <p class="text-xs font-bold text-rose-500 uppercase tracking-widest mb-1">JÁ VENCIDOS</p>
+                <p class="text-3xl font-black text-white">{{ kpi.vencidos }} <span class="text-sm font-normal text-slate-500">pal</span></p>
+                <div class="mt-2 h-1 w-full bg-slate-700 rounded"><div class="h-full bg-rose-500 rounded" style="width: 100%"></div></div>
+            </a>
+
+            <a href="?status=critico" class="group bg-slate-800 rounded-xl p-4 border border-slate-700 hover:border-orange-500/50 transition relative overflow-hidden">
+                <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition text-6xl text-orange-500"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <p class="text-xs font-bold text-orange-500 uppercase tracking-widest mb-1">CRÍTICOS (30 DIAS)</p>
+                <p class="text-3xl font-black text-white">{{ kpi.criticos }} <span class="text-sm font-normal text-slate-500">pal</span></p>
+                <div class="mt-2 h-1 w-full bg-slate-700 rounded"><div class="h-full bg-orange-500 rounded animate-pulse" style="width: 100%"></div></div>
+            </a>
+
+            <a href="?status=atencao" class="group bg-slate-800 rounded-xl p-4 border border-slate-700 hover:border-yellow-500/50 transition relative overflow-hidden">
+                <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition text-6xl text-yellow-500"><i class="fa-regular fa-clock"></i></div>
+                <p class="text-xs font-bold text-yellow-500 uppercase tracking-widest mb-1">ATENÇÃO (90 DIAS)</p>
+                <p class="text-3xl font-black text-white">{{ kpi.atencao }} <span class="text-sm font-normal text-slate-500">pal</span></p>
+                <div class="mt-2 h-1 w-full bg-slate-700 rounded"><div class="h-full bg-yellow-500 rounded" style="width: 100%"></div></div>
+            </a>
+
+            <a href="{% url 'fefo' %}" class="bg-slate-800/50 border border-dashed border-slate-600 rounded-xl p-4 flex flex-col items-center justify-center hover:bg-slate-700 transition cursor-pointer text-slate-400 hover:text-white">
+                <i class="fa-solid fa-filter-circle-xmark text-2xl mb-2"></i>
+                <span class="text-sm font-bold">VER TUDO</span>
+            </a>
+        </div>
+
+        <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
+            <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+                <h2 class="font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-list-ol text-blue-500"></i> Fila de Expedição (Prioridade)
+                </h2>
+                <span class="text-xs text-slate-500">{{ lista_fefo|length }} registros encontrados</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-900 text-xs uppercase text-slate-400 font-bold border-b border-slate-700">
+                            <th class="p-4 w-10 text-center">#</th>
+                            <th class="p-4">Prioridade (Dias)</th>
+                            <th class="p-4">Produto</th>
+                            <th class="p-4">Lote</th>
+                            <th class="p-4">Validade</th>
+                            <th class="p-4 text-center">Local (Rua)</th>
+                            <th class="p-4 text-right">Qtd</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-700 text-sm">
+                        {% for item in lista_fefo %}
+                        <tr class="hover:bg-slate-700/50 transition group">
+                            <td class="p-4 text-center text-slate-600 font-mono text-xs">{{ forloop.counter }}</td>
+                            
+                            <td class="p-4">
+                                <span class="px-2.5 py-1 rounded border text-xs font-bold whitespace-nowrap {{ item.cor }}">
+                                    {% if item.dias < 0 %}
+                                        VENCIDO HÁ {{ item.dias|stringformat:"d"|slice:"1:" }} DIAS
+                                    {% else %}
+                                        VENCE EM {{ item.dias }} DIAS
+                                    {% endif %}
+                                </span>
+                            </td>
+
+                            <td class="p-4">
+                                <p class="font-medium text-white line-clamp-1 text-xs md:text-sm" title="{{ item.produto }}">{{ item.produto }}</p>
+                                <p class="text-[10px] text-slate-500">{{ item.sku }}</p>
+                            </td>
+
+                            <td class="p-4 font-mono text-xs text-slate-300">{{ item.lote|default:"-" }}</td>
+                            
+                            <td class="p-4 text-slate-300">{{ item.validade|date:"d/m/Y" }}</td>
+
+                            <td class="p-4 text-center">
+                                <a href="{% url 'dashboard' item.gp %}" target="_blank" class="bg-slate-700 hover:bg-blue-600 hover:text-white text-slate-300 px-2 py-1 rounded text-xs font-bold transition">
+                                    GP{{ item.gp }} - {{ item.rua }} <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i>
+                                </a>
+                            </td>
+
+                            <td class="p-4 text-right font-bold text-white">{{ item.qtd }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="p-12 text-center text-slate-500">
+                                <i class="fa-solid fa-check-circle text-4xl mb-3 text-emerald-500/50"></i>
+                                <p>Tudo limpo! Nenhum item corresponde aos critérios de risco.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

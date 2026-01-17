@@ -1,0 +1,74 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="p-4 max-w-6xl mx-auto">
+    
+    <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-people-carry-box text-emerald-500"></i> Otimização de Espaço
+            </h1>
+            <p class="text-slate-400 text-sm">Sugestões automáticas para consolidar lotes iguais e liberar ruas inteiras.</p>
+        </div>
+        
+        <div class="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 text-center">
+            <span class="block text-2xl font-bold text-emerald-400">{{ qtd_oportunidades }}</span>
+            <span class="text-xs text-slate-400 uppercase tracking-wider">Oportunidades</span>
+        </div>
+    </div>
+
+    {% if not sugestoes %}
+        <div class="text-center py-16 bg-slate-800/50 rounded-xl border border-dashed border-slate-700">
+            <i class="fa-solid fa-check-circle text-5xl text-emerald-600 mb-4"></i>
+            <h3 class="text-xl font-bold text-slate-300">Estoque Otimizado!</h3>
+            <p class="text-slate-500 mt-2">Não encontramos ruas fracionadas que possam ser unidas no momento.</p>
+        </div>
+    {% else %}
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for s in sugestoes %}
+            <div class="bg-slate-800 rounded-xl p-0 border border-slate-700 shadow-lg overflow-hidden flex flex-col">
+                
+                <div class="bg-slate-900/50 p-4 border-b border-slate-700 flex justify-between items-start">
+                    <div>
+                        <h3 class="font-bold text-slate-200 text-sm md:text-base">{{ s.produto }}</h3>
+                        <div class="flex gap-3 mt-1 text-xs text-slate-400">
+                            <span><i class="fa-solid fa-barcode"></i> {{ s.sku }}</span>
+                            <span><i class="fa-solid fa-calendar"></i> Val: {{ s.validade }}</span>
+                        </div>
+                    </div>
+                    <span class="bg-emerald-500/10 text-emerald-400 text-xs px-2 py-1 rounded border border-emerald-500/20 font-bold whitespace-nowrap">
+                        {{ s.ganho }}
+                    </span>
+                </div>
+
+                <div class="p-4 flex items-center justify-between gap-2 relative">
+                    
+                    <div class="flex-1 text-center bg-rose-900/10 p-3 rounded-lg border border-rose-500/20 border-dashed">
+                        <p class="text-[10px] text-rose-400 uppercase font-bold mb-1">DE (ORIGEM)</p>
+                        <h2 class="text-2xl font-black text-white">Rua {{ s.origem_rua }}</h2>
+                        <span class="text-xs text-slate-500">Galpão {{ s.origem_gp }}</span>
+                    </div>
+
+                    <div class="flex flex-col items-center justify-center z-10">
+                        <div class="bg-slate-700 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg mb-1">
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+                        <span class="text-xs font-bold text-white bg-slate-600 px-2 py-0.5 rounded-full">
+                            {{ s.qtd_mover }} pal
+                        </span>
+                    </div>
+
+                    <div class="flex-1 text-center bg-emerald-900/10 p-3 rounded-lg border border-emerald-500/20">
+                        <p class="text-[10px] text-emerald-400 uppercase font-bold mb-1">PARA (DESTINO)</p>
+                        <h2 class="text-2xl font-black text-white">Rua {{ s.destino_rua }}</h2>
+                        <span class="text-xs text-emerald-500 font-bold">Livre: {{ s.destino_livre }} pal</span>
+                    </div>
+
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

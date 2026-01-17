@@ -347,3 +347,78 @@ def picking_busca(request):
         'clientes': lista_clientes, # Agora a lista vai para o HTML!
         'cliente_selecionado': cliente_selecionado
     })
+    # =============================================================================
+# 5. CONSOLIDAÇÃO / OTIMIZAÇÃO DE ESPAÇO (NOVO)
+# =============================================================================
+def sugestao_consolidacao(request):
+    # 1. Busca todo o estoque atual
+    estoque = InventarioDiario.objects.select_related('rua').all()
+    
+    # 2. Agrupa por SKU + Validade (Chave Única)
+    # Ex: 'HEINEKEN_2025-10-10' -> [ItemRua1, ItemRua2, ItemRua3]
+    grupos = {}
+    for item in estoque:
+        # Cria uma chave única: SKU + Data de Validade (se houver)
+        data_val = item.data_validade.strftime('%Y-%m-%d') if item.data_validade else 'ND'
+        chave = f"{item.sku}|{data_val}"
+        
+        if chave not in grupos:
+            grupos[chave] = []
+        grupos[chave].append(item)
+
+    sugestoes = []
+
+    # 3. Analisa cada grupo procurando oportunidades
+    for chave, itens in grupos.items():
+        if len(itens) < 2: 
+            continue # Se só tem em 1 lugar, não tem o que juntar
+        
+        # Separa SKU e Data para exibir bonito
+        sku, data_val = chave.split('|')
+        descricao_produto = itens[0].descricao
+        
+        # Ordena: Quem tem MENOS paletes primeiro (candidato a sair)
+        # e quem tem MAIS espaço livre (candidato a receber)
+        itens.sort(key=lambda x: x.quantidade_paletes)
+
+        # Tenta combinar pares
+        for i in range(len(itens)):
+            origem = itens[i]
+            if origem.quantidade_paletes == 0: continue
+
+            for j in range(len(itens)):
+                if i == j: continue # Não pode mover pra si mesmo
+                
+                destino = itens[j]
+                
+                # Capacidade da Rua de Destino
+                cap_max = destino.rua.cap_maxima
+                ocupacao_destino = sum(x.quantidade_paletes for x in estoque if x.rua == destino.rua)
+                espaco_livre = cap_max - ocupacao_destino
+                
+                # A MÁGICA: Cabe tudo da origem no destino?
+                # (Considerando uma margem de segurança de 0.1 para erros de float)
+                if espaco_livre >= (origem.quantidade_paletes - 0.1):
+                    
+                    sugestoes.append({
+                        'produto': descricao_produto,
+                        'sku': sku,
+                        'validade': data_val,
+                        'qtd_mover': int(origem.quantidade_paletes),
+                        'origem_rua': origem.rua.rua,
+                        'origem_gp': origem.rua.gp,
+                        'destino_rua': destino.rua.rua,
+                        'destino_gp': destino.rua.gp,
+                        'destino_livre': int(espaco_livre),
+                        'ganho': f"Libera 100% da Rua {origem.rua.rua}"
+                    })
+                    
+                    # Simula a mudança para não sugerir mover a mesma coisa duas vezes no loop
+                    destino.quantidade_paletes += origem.quantidade_paletes
+                    origem.quantidade_paletes = 0
+                    break # Sai do loop interno e vai para o próximo item
+
+    return render(request, 'core/consolidacao.html', {
+        'sugestoes': sugestoes,
+        'qtd_oportunidades': len(sugestoes)
+    })

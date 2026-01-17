@@ -17,4 +17,6 @@ urlpatterns = [
 
     # Operação (Picking)
     path('picking/', views.picking_busca, name='picking'),
+    
+    path('consolidacao/', views.sugestao_consolidacao, name='consolidacao'),
 ]

@@ -1,20 +1,30 @@
 from django.contrib import admin
-from .models import LayoutArmazem, InventarioDiario, Produto
+from .models import LayoutArmazem, InventarioDiario, Produto, Cliente
 
+# Configuração do Layout do Armazém
 @admin.register(LayoutArmazem)
 class LayoutArmazemAdmin(admin.ModelAdmin):
-    list_display = ('rua', 'gp', 'cap_maxima', 'tipo_armazem')
+    # REMOVIDO 'nivel' PARA CORRIGIR O ERRO
+    list_display = ('rua', 'gp', 'cap_maxima') 
+    list_filter = ('gp',)
     search_fields = ('rua',)
-    list_filter = ('gp', 'tipo_armazem')
 
+# Configuração do Produto (Cadastro Mestre)
+@admin.register(Produto)
+class ProdutoAdmin(admin.ModelAdmin):
+    list_display = ('sku', 'descricao', 'tipo', 'shelf_life_dias')
+    list_filter = ('tipo',)
+    search_fields = ('sku', 'descricao')
+
+# Configuração do Inventário
 @admin.register(InventarioDiario)
 class InventarioDiarioAdmin(admin.ModelAdmin):
     list_display = ('data_referencia', 'rua', 'sku', 'descricao', 'quantidade_paletes', 'data_validade')
     list_filter = ('data_referencia', 'status')
+    search_fields = ('sku', 'descricao', 'lote')
 
-@admin.register(Produto)
-class ProdutoAdmin(admin.ModelAdmin):
-    # AQUI ESTAVA O ERRO: Removemos 'alertar_em' e pusemos as colunas novas
-    list_display = ('sku', 'descricao', 'familia', 'tipo', 'shelf_life_dias', 'paletizacao')
-    search_fields = ('sku', 'descricao')
-    list_filter = ('tipo', 'familia')
+# Configuração do Cliente (SLA)
+@admin.register(Cliente)
+class ClienteAdmin(admin.ModelAdmin):
+    list_display = ('nome', 'tipo_restricao', 'valor_restricao')
+    search_fields = ('nome',)

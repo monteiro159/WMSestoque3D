@@ -1,19 +1,20 @@
 from django.contrib import admin
 from django.urls import path
-from core.views import upload_inventario, dashboard_armazem, radar_fefo
+from core import views  # <--- O JEITO CERTO (Importa o arquivo todo)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    
-    # Rota de Upload
-    path('upload/', upload_inventario, name='upload'),
-    
-    # Rota do Dashboard (Mapa)
-    path('dashboard/<int:galpao_id>/', dashboard_armazem, name='dashboard'),
-    
-    # Rota do Radar FEFO (A LINHA QUE FALTAVA)
-    path('fefo/', radar_fefo, name='fefo'),
 
-    # Rota Raiz (Entrada do site)
-    path('', upload_inventario), 
+    # Dashboard
+    path('', views.dashboard_armazem, name='home'),
+    path('dashboard/<int:galpao_id>/', views.dashboard_armazem, name='dashboard'),
+
+    # Upload
+    path('upload/', views.upload_inventario, name='upload'),
+
+    # Relatórios
+    path('fefo/', views.radar_fefo, name='fefo'),
+
+    # Operação (Picking)
+    path('picking/', views.picking_busca, name='picking'),
 ]

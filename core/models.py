@@ -86,3 +86,37 @@ class InventarioDiario(models.Model):
 
     def __str__(self):
         return f"{self.data_referencia} | Rua {self.rua_id} | SKU {self.sku}"
+    
+    # =============================================================================
+# NOVA CLASSE: CLIENTE
+# =============================================================================
+class Cliente(models.Model):
+    # 1. A Lista DEVE vir primeiro (Python lê de cima para baixo)
+    TIPOS_RESTRICAO = [
+        ('DIAS_PRODUCAO', 'Máximo de Dias desde Produção (Idade)'),
+        ('MIN_SHELF_LIFE', 'Mínimo de Shelf Life Restante (%)'),
+    ]
+
+    # 2. Agora sim podemos usar choices=TIPOS_RESTRICAO
+    nome = models.CharField(max_length=100, verbose_name="Nome do Cliente")
+    
+    tipo_restricao = models.CharField(
+        max_length=20, 
+        choices=TIPOS_RESTRICAO, # Aqui ele busca a lista criada ali em cima
+        default='MIN_SHELF_LIFE',
+        verbose_name="Tipo de Regra"
+    )
+    
+    valor_restricao = models.IntegerField(
+        help_text="Ex: 80 (para 80%) ou 30 (para 30 dias de idade máx)",
+        verbose_name="Valor da Regra"
+    )
+
+    def __str__(self):
+        # Exibe algo como: "Cliente 80% vida"
+        tipo_display = self.get_tipo_restricao_display()
+        return f"{self.nome} ({self.valor_restricao} - {tipo_display})"
+
+    class Meta:
+        verbose_name = "Regra de Cliente (SLA)"
+        verbose_name_plural = "Regras de Clientes (SLA)"

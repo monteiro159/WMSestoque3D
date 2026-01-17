@@ -2,12 +2,12 @@ import pandas as pd
 from datetime import date, timedelta
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.db.models import Sum
+from django.db.models import Sum, Q  # <--- O Q ESTÁ AQUI
 from .forms import UploadInventarioForm
-from .models import InventarioDiario, LayoutArmazem, Produto
+from .models import InventarioDiario, LayoutArmazem, Produto, Cliente
 
 # =============================================================================
-# 1. FUNÇÃO DE UPLOAD (CORRIGIDA: Proteção contra Quantidade Vazia/NaN)
+# 1. FUNÇÃO DE UPLOAD
 # =============================================================================
 def upload_inventario(request):
     if request.method == "POST":
@@ -19,9 +19,8 @@ def upload_inventario(request):
             try:
                 # Lê o Excel
                 df = pd.read_excel(arquivo)
-                df.columns = df.columns.str.strip().str.upper() # Tudo maiúsculo
+                df.columns = df.columns.str.strip().str.upper()
                 
-                # Verifica coluna de endereço
                 col_endereco = next((c for c in df.columns if 'ENDERE' in c), None)
                 if not col_endereco:
                     messages.error(request, "A coluna 'Endereço' não foi encontrada!")
@@ -30,24 +29,19 @@ def upload_inventario(request):
                 objetos_para_salvar = []
                 produtos_cache = {p.sku: p for p in Produto.objects.all()} 
                 
-                # Identifica a coluna de Quantidade (Procura nomes comuns)
                 col_qtd = next((c for c in df.columns if c in ['QUANTIDADE', 'QTD', 'QTDE', 'SALDO']), None)
-                # Se não achar pelo nome, pega a última coluna (comportamento padrão de WMS)
                 if not col_qtd: col_qtd = df.columns[-1]
 
                 for index, row in df.iterrows():
                     try:
-                        # 1. Identifica a Rua
                         cod_rua = int(row[col_endereco])
                         rua_obj = LayoutArmazem.objects.filter(rua=cod_rua).first()
                         if not rua_obj: continue 
                         
-                        # 2. Identifica Produto
                         col_sku = 'ITEM' if 'ITEM' in df.columns else 'SKU'
                         sku_val = str(row.get(col_sku, '')).strip()
                         produto_mestre = produtos_cache.get(sku_val)
 
-                        # 3. Dados Básicos
                         desc_val = str(row.get('MATERIAL', '')).strip()
                         if not desc_val and 'PRODUTO' in df.columns: 
                             desc_val = str(row.get('PRODUTO', '')).strip()
@@ -59,7 +53,6 @@ def upload_inventario(request):
                             if not tipo_val or pd.isna(tipo_val) or tipo_val == 'nan': 
                                 tipo_val = produto_mestre.tipo 
                         
-                        # 4. Tratamento de Datas
                         d_prod = pd.to_datetime(row.get('PRODUÇÃO'), dayfirst=True, errors='coerce')
                         if pd.isna(d_prod): d_prod = None
                         
@@ -72,18 +65,13 @@ def upload_inventario(request):
                         if d_prod and not d_val and produto_mestre and produto_mestre.shelf_life_dias > 0:
                             d_val = d_prod + timedelta(days=produto_mestre.shelf_life_dias)
 
-                        # 5. Tratamento BLINDADO da Quantidade (A CORREÇÃO ESTÁ AQUI)
                         try:
                             val_raw = row.get(col_qtd)
                             qtd = float(val_raw)
-                            # Se for NaN (Not a Number), força ser 0.0
-                            if pd.isna(qtd): 
-                                qtd = 0.0
+                            if pd.isna(qtd): qtd = 0.0
                         except:
-                            # Se der qualquer erro na conversão, assume 0
                             qtd = 0.0
 
-                        # Cria Lote
                         lote_virtual = f"{sku_val}_{d_prod.strftime('%Y%m%d')}" if d_prod else f"{sku_val}_ND"
                         if 'LOTE' in df.columns and pd.notnull(row.get('LOTE')):
                              lote_virtual = str(row.get('LOTE'))
@@ -93,7 +81,7 @@ def upload_inventario(request):
                             rua=rua_obj,
                             sku=sku_val,
                             descricao=desc_val,
-                            quantidade_paletes=qtd, # Agora garantido que é número
+                            quantidade_paletes=qtd,
                             status=str(row.get('STATUS', 'ESTOQUE')),
                             tipo_produto=tipo_val,
                             data_validade=d_val,
@@ -102,8 +90,7 @@ def upload_inventario(request):
                         )
                         objetos_para_salvar.append(obj)
 
-                    except Exception as e:
-                        continue
+                    except: continue
 
                 if objetos_para_salvar:
                     InventarioDiario.objects.filter(data_referencia=data_ref).delete()
@@ -111,7 +98,7 @@ def upload_inventario(request):
                     messages.success(request, f"Sucesso! {len(objetos_para_salvar)} registros importados.")
                     return redirect('dashboard', galpao_id=1)
                 else:
-                    messages.warning(request, "Nenhum dado válido encontrado. Verifique as colunas do Excel.")
+                    messages.warning(request, "Nenhum dado válido encontrado.")
             
             except Exception as e:
                 messages.error(request, f"Erro crítico: {str(e)}")
@@ -123,7 +110,7 @@ def upload_inventario(request):
     return render(request, 'core/upload.html', {'form': form})
 
 # =============================================================================
-# 2. DASHBOARD PRINCIPAL
+# 2. DASHBOARD
 # =============================================================================
 def dashboard_armazem(request, galpao_id=1):
     filtro_produto = request.GET.get('produto', '').strip().lower()
@@ -167,7 +154,6 @@ def dashboard_armazem(request, galpao_id=1):
         for item in lista_itens:
             dias_venc = 9999
             validade_str = "-"
-            
             if item.data_validade:
                 dias_venc = (item.data_validade - date.today()).days
                 validade_str = item.data_validade.strftime('%Y-%m-%d')
@@ -182,12 +168,10 @@ def dashboard_armazem(request, galpao_id=1):
             })
         
         detalhes.sort(key=lambda x: x['dias_venc'])
-
         pct = int((ocupacao / rua.cap_maxima) * 100) if rua.cap_maxima > 0 else 0
         
         cor_bg = "bg-emerald-600/20 border-emerald-500/50"
         cor_bar = "bg-emerald-500"
-        
         if pct > 70: 
             cor_bg = "bg-amber-600/20 border-amber-500/50"
             cor_bar = "bg-amber-500"
@@ -235,7 +219,6 @@ def dashboard_armazem(request, galpao_id=1):
 # =============================================================================
 def radar_fefo(request):
     filtro_status = request.GET.get('status', '')
-    
     ultimo = InventarioDiario.objects.order_by('-data_referencia').first()
     data_ref = ultimo.data_referencia if ultimo else date.today()
     hoje = date.today()
@@ -243,7 +226,6 @@ def radar_fefo(request):
     kpi_vencidos = 0
     kpi_criticos = 0
     kpi_atencao = 0
-
     lista_fefo = []
     
     itens_raw = InventarioDiario.objects.filter(
@@ -252,12 +234,10 @@ def radar_fefo(request):
     ).select_related('rua')
 
     for item in itens_raw:
-        # Filtro PA
         tipo_item = str(item.tipo_produto).strip().upper()
         if tipo_item != 'PA': continue 
 
         dias = (item.data_validade - hoje).days
-        
         status_fefo = "ok"
         cor_badge = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
         
@@ -294,12 +274,76 @@ def radar_fefo(request):
     context = {
         'lista_fefo': lista_fefo,
         'data_ref': data_ref,
-        'kpi': {
-            'vencidos': kpi_vencidos,
-            'criticos': kpi_criticos,
-            'atencao': kpi_atencao
-        },
+        'kpi': {'vencidos': kpi_vencidos, 'criticos': kpi_criticos, 'atencao': kpi_atencao},
         'filtro_atual': filtro_status
     }
-    
     return render(request, 'core/fefo.html', context)
+
+# =============================================================================
+# 4. PICKING / SUGESTÃO DE EXPEDIÇÃO
+# =============================================================================
+def picking_busca(request):
+    termo = request.GET.get('q', '').strip()
+    cliente_id = request.GET.get('cliente')
+    
+    resultados_finais = []
+    # AQUI ESTÁ O SEGREDO: Buscamos os clientes para preencher o menu
+    lista_clientes = Cliente.objects.all() 
+    cliente_selecionado = None
+
+    if termo:
+        # 1. Busca Inicial (Traz tudo ordenado por FEFO - Data Validade)
+        itens_brutos = InventarioDiario.objects.filter(
+            Q(sku__icontains=termo) | Q(descricao__icontains=termo)
+        ).exclude(data_validade__isnull=True).select_related('rua').order_by('data_validade')
+
+        # 2. Se tiver Cliente selecionado no menu, aplica o Filtro de SLA
+        if cliente_id:
+            try:
+                cliente = Cliente.objects.get(id=cliente_id)
+                cliente_selecionado = cliente
+                
+                hoje = date.today()
+                # Cache para não buscar no banco toda hora
+                cache_produtos = {p.sku: p for p in Produto.objects.all()}
+
+                for item in itens_brutos:
+                    if not item.data_producao or not item.data_validade:
+                        continue
+                    
+                    passou_na_regra = False
+                    
+                    # REGRA 1: IDADE MÁXIMA (Dias desde Produção)
+                    if cliente.tipo_restricao == 'DIAS_PRODUCAO':
+                        idade_do_produto = (hoje - item.data_producao).days
+                        if idade_do_produto <= cliente.valor_restricao:
+                            passou_na_regra = True
+                    
+                    # REGRA 2: % DE VIDA ÚTIL RESTANTE
+                    elif cliente.tipo_restricao == 'MIN_SHELF_LIFE':
+                        prod_mestre = cache_produtos.get(item.sku)
+                        if prod_mestre and prod_mestre.shelf_life_dias > 0:
+                            dias_restantes = (item.data_validade - hoje).days
+                            total_vida = prod_mestre.shelf_life_dias
+                            pct_restante = (dias_restantes / total_vida) * 100
+                            
+                            if pct_restante >= cliente.valor_restricao:
+                                passou_na_regra = True
+                        else:
+                            passou_na_regra = True # Sem cadastro mestre, aprova por padrão
+
+                    if passou_na_regra:
+                        resultados_finais.append(item)
+            
+            except Cliente.DoesNotExist:
+                resultados_finais = itens_brutos
+        else:
+            # Sem cliente? Mostra FEFO puro
+            resultados_finais = itens_brutos
+
+    return render(request, 'core/picking.html', {
+        'termo': termo,
+        'resultados': resultados_finais,
+        'clientes': lista_clientes, # Agora a lista vai para o HTML!
+        'cliente_selecionado': cliente_selecionado
+    })

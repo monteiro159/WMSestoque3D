@@ -19,4 +19,7 @@ urlpatterns = [
     path('picking/', views.picking_busca, name='picking'),
     
     path('consolidacao/', views.sugestao_consolidacao, name='consolidacao'),
+    
+    path('consolidar/confirmar/', views.realizar_consolidacao, name='confirmar_consolidacao'),
+
 ]

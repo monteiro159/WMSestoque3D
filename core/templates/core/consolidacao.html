@@ -3,66 +3,180 @@
 {% block content %}
 <div class="p-4 max-w-6xl mx-auto">
     
-    <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-        <div>
-            <h1 class="text-2xl font-bold text-slate-100 flex items-center gap-2">
-                <i class="fa-solid fa-people-carry-box text-emerald-500"></i> Otimização de Espaço
-            </h1>
-            <p class="text-slate-400 text-sm">Sugestões automáticas para consolidar lotes iguais e liberar ruas inteiras.</p>
-        </div>
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-people-carry-box text-purple-500"></i> Otimização de Espaço
+        </h1>
+        <p class="text-slate-400 text-sm">Consolidação inteligente para defragmentar o estoque.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         
-        <div class="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 text-center">
-            <span class="block text-2xl font-bold text-emerald-400">{{ qtd_oportunidades }}</span>
-            <span class="text-xs text-slate-400 uppercase tracking-wider">Oportunidades</span>
+        <div class="bg-gradient-to-br from-emerald-900/40 to-slate-800 rounded-xl p-5 border border-emerald-500/30 shadow-lg flex items-center justify-between">
+            <div>
+                <p class="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">Ruas a Liberar</p>
+                <p class="text-4xl font-black text-white">+{{ ganho_ruas }}</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl">
+                <i class="fa-solid fa-road"></i>
+            </div>
+        </div>
+
+        <div class="bg-gradient-to-br from-blue-900/40 to-slate-800 rounded-xl p-5 border border-blue-500/30 shadow-lg flex items-center justify-between">
+            <div>
+                <p class="text-blue-400 text-xs font-bold uppercase tracking-wider mb-1">Eficiência / Ganho</p>
+                <p class="text-4xl font-black text-white">{{ pct_otimizacao|floatformat:1 }}%</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-2xl">
+                <i class="fa-solid fa-chart-line"></i>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-lg flex flex-col justify-center">
+            <p class="text-slate-400 text-xs mb-1">Cenário Atual</p>
+            <div class="flex items-baseline gap-2">
+                <span class="text-xl font-bold text-white">{{ total_ocupadas }}</span>
+                <span class="text-xs text-slate-500">ruas ocupadas hoje</span>
+            </div>
+            <div class="w-full bg-slate-700 h-1.5 rounded-full mt-3 overflow-hidden">
+                <div class="bg-blue-500 h-1.5 rounded-full" style="width: {{ pct_otimizacao|floatformat:0 }}%"></div>
+            </div>
+            <p class="text-[10px] text-blue-400 mt-1">Sua meta é reduzir esse número.</p>
         </div>
     </div>
+
+    {% if movimentos_feitos %}
+        <div class="mb-8 space-y-4 animate-fade-in-down">
+            <h2 class="text-slate-400 text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-check-double text-emerald-500"></i> Realizados Recentemente
+            </h2>
+            
+            {% for feito in movimentos_feitos %}
+            <div class="bg-slate-800/40 rounded-xl border border-emerald-900/50 p-4 flex flex-col md:flex-row items-center justify-between gap-4 opacity-75 hover:opacity-100 transition relative overflow-hidden">
+                
+                <div class="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
+
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-full bg-emerald-900/50 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-300 line-through decoration-slate-500">{{ feito.produto }}</h3>
+                        <p class="text-xs text-slate-500">SKU: {{ feito.sku }}</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 text-sm font-mono text-slate-400 bg-slate-900/50 px-4 py-2 rounded-lg border border-slate-700/50">
+                    <span class="line-through">Rua {{ feito.origem_rua }}</span>
+                    <i class="fa-solid fa-arrow-right text-emerald-600"></i>
+                    <span class="text-emerald-500 font-bold">Rua {{ feito.destino_rua }}</span>
+                    <span class="ml-2 text-xs bg-emerald-900 text-emerald-300 px-2 py-0.5 rounded">{{ feito.qtd }} pal</span>
+                </div>
+
+                <div class="px-4 hidden md:block">
+                    <span class="text-emerald-500 font-black text-xl tracking-widest opacity-50">OK</span>
+                </div>
+            </div>
+            {% endfor %}
+            
+            <div class="border-b border-slate-800 my-6"></div>
+        </div>
+    {% endif %}
 
     {% if not sugestoes %}
         <div class="text-center py-16 bg-slate-800/50 rounded-xl border border-dashed border-slate-700">
             <i class="fa-solid fa-check-circle text-5xl text-emerald-600 mb-4"></i>
-            <h3 class="text-xl font-bold text-slate-300">Estoque Otimizado!</h3>
-            <p class="text-slate-500 mt-2">Não encontramos ruas fracionadas que possam ser unidas no momento.</p>
+            <h3 class="text-xl font-bold text-slate-300">Estoque 100% Otimizado!</h3>
+            <p class="text-slate-500 mt-2">Não há ruas fragmentadas para consolidar hoje.</p>
         </div>
     {% else %}
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 gap-6">
             {% for s in sugestoes %}
-            <div class="bg-slate-800 rounded-xl p-0 border border-slate-700 shadow-lg overflow-hidden flex flex-col">
+            <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden group hover:border-purple-500/50 transition-all">
                 
-                <div class="bg-slate-900/50 p-4 border-b border-slate-700 flex justify-between items-start">
-                    <div>
-                        <h3 class="font-bold text-slate-200 text-sm md:text-base">{{ s.produto }}</h3>
-                        <div class="flex gap-3 mt-1 text-xs text-slate-400">
-                            <span><i class="fa-solid fa-barcode"></i> {{ s.sku }}</span>
-                            <span><i class="fa-solid fa-calendar"></i> Val: {{ s.validade }}</span>
+                <div class="bg-slate-900/50 p-3 border-b border-slate-700 flex flex-col md:flex-row justify-between md:items-center gap-2">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-purple-500/10 p-2 rounded text-purple-400">
+                            <i class="fa-solid fa-dolly"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-200 text-sm md:text-base">{{ s.produto }}</h3>
+                            <div class="flex gap-3 text-xs text-slate-400 font-mono">
+                                <span>SKU: {{ s.sku }}</span>
+                                <span class="text-amber-500">Val: {{ s.validade }}</span>
+                            </div>
                         </div>
                     </div>
-                    <span class="bg-emerald-500/10 text-emerald-400 text-xs px-2 py-1 rounded border border-emerald-500/20 font-bold whitespace-nowrap">
-                        {{ s.ganho }}
+                    <span class="bg-emerald-500/10 text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/20 font-bold">
+                        <i class="fa-solid fa-star mr-1"></i> {{ s.ganho }}
                     </span>
                 </div>
 
-                <div class="p-4 flex items-center justify-between gap-2 relative">
+                <div class="p-6 grid grid-cols-1 md:grid-cols-7 gap-4 items-center relative">
                     
-                    <div class="flex-1 text-center bg-rose-900/10 p-3 rounded-lg border border-rose-500/20 border-dashed">
-                        <p class="text-[10px] text-rose-400 uppercase font-bold mb-1">DE (ORIGEM)</p>
-                        <h2 class="text-2xl font-black text-white">Rua {{ s.origem_rua }}</h2>
-                        <span class="text-xs text-slate-500">Galpão {{ s.origem_gp }}</span>
+                    <div class="md:col-span-3 bg-rose-900/5 p-4 rounded-xl border border-rose-500/10 text-center relative group-hover:bg-rose-900/10 transition">
+                        <p class="text-[10px] text-rose-400 uppercase font-bold mb-2">SAI DE (ORIGEM)</p>
+                        <a href="{% url 'home' %}?produto={{ s.sku }}" target="_blank" class="inline-block hover:scale-105 transition">
+                            <h2 class="text-3xl font-black text-white cursor-pointer underline decoration-slate-600 decoration-2 underline-offset-4 hover:decoration-rose-500 hover:text-rose-100">
+                                Rua {{ s.origem_rua }} <i class="fa-solid fa-arrow-up-right-from-square text-xs ml-1 opacity-50"></i>
+                            </h2>
+                        </a>
+                        <p class="text-xs text-slate-500 mt-1 font-bold">Galpão {{ s.origem_gp }}</p>
+                        <div class="mt-4 flex justify-center gap-2 text-xs font-mono">
+                            <span class="text-slate-400">Atual: <b class="text-white">{{ s.qtd_mover }}</b></span>
+                            <i class="fa-solid fa-arrow-right text-slate-600"></i>
+                            <span class="text-emerald-400">Futuro: <b>0</b> (Vazio)</span>
+                        </div>
                     </div>
 
-                    <div class="flex flex-col items-center justify-center z-10">
-                        <div class="bg-slate-700 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg mb-1">
-                            <i class="fa-solid fa-arrow-right"></i>
-                        </div>
-                        <span class="text-xs font-bold text-white bg-slate-600 px-2 py-0.5 rounded-full">
-                            {{ s.qtd_mover }} pal
+                    <div class="md:col-span-1 flex flex-col items-center justify-center z-10 py-4 md:py-0">
+                        <div class="w-full h-px bg-slate-600 absolute top-1/2 left-0 hidden md:block -z-10"></div>
+                        
+                        <form action="{% url 'confirmar_consolidacao' %}" method="POST">
+                            {% csrf_token %}
+                            <input type="hidden" name="origem_rua_id" value="{{ s.origem_rua_id }}">
+                            <input type="hidden" name="destino_rua_id" value="{{ s.destino_rua_id }}">
+                            <input type="hidden" name="sku" value="{{ s.sku }}">
+                            <input type="hidden" name="validade" value="{{ s.validade }}">
+
+                            <input type="hidden" name="produto_nome" value="{{ s.produto }}">
+                            <input type="hidden" name="origem_nome" value="{{ s.origem_rua }}">
+                            <input type="hidden" name="destino_nome" value="{{ s.destino_rua }}">
+                            <input type="hidden" name="qtd" value="{{ s.qtd_mover }}">
+                            <input type="hidden" name="gp_origem" value="{{ s.origem_gp }}">
+                            <input type="hidden" name="gp_destino" value="{{ s.destino_gp }}">
+
+                            <button type="submit" class="group/btn relative" title="Confirmar Movimentação">
+                                <div class="bg-slate-700 group-hover/btn:bg-emerald-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-4 border-slate-800 transition-all duration-100 cursor-pointer active:scale-95 hover:scale-110 hover:shadow-emerald-500/50">
+                                    <i class="fa-solid fa-check text-xl group-hover/btn:scale-125 transition-transform"></i>
+                                </div>
+                            </button>
+                        </form>
+
+                        <span class="mt-3 bg-slate-800 text-slate-300 text-[10px] font-bold px-3 py-1 rounded-full border border-slate-600 shadow-sm">
+                            MOVER {{ s.qtd_mover }}
                         </span>
                     </div>
 
-                    <div class="flex-1 text-center bg-emerald-900/10 p-3 rounded-lg border border-emerald-500/20">
-                        <p class="text-[10px] text-emerald-400 uppercase font-bold mb-1">PARA (DESTINO)</p>
-                        <h2 class="text-2xl font-black text-white">Rua {{ s.destino_rua }}</h2>
-                        <span class="text-xs text-emerald-500 font-bold">Livre: {{ s.destino_livre }} pal</span>
+                    <div class="md:col-span-3 bg-emerald-900/5 p-4 rounded-xl border border-emerald-500/10 text-center relative group-hover:bg-emerald-900/10 transition">
+                        <p class="text-[10px] text-emerald-400 uppercase font-bold mb-2">VAI PARA (DESTINO)</p>
+                        <a href="{% url 'home' %}?produto={{ s.sku }}" target="_blank" class="inline-block hover:scale-105 transition">
+                            <h2 class="text-3xl font-black text-white cursor-pointer underline decoration-slate-600 decoration-2 underline-offset-4 hover:decoration-emerald-500 hover:text-emerald-100">
+                                Rua {{ s.destino_rua }} <i class="fa-solid fa-arrow-up-right-from-square text-xs ml-1 opacity-50"></i>
+                            </h2>
+                        </a>
+                        <p class="text-xs text-slate-500 mt-1 font-bold">Galpão {{ s.destino_gp }}</p>
+                        <div class="mt-4 flex justify-center items-center gap-3 text-xs font-mono bg-slate-900/30 py-2 rounded-lg mx-4">
+                            <div class="text-right">
+                                <span class="block text-[9px] text-slate-500">OCUPAÇÃO ATUAL</span>
+                                <span class="text-white font-bold">{{ s.destino_antes }}/{{ s.destino_cap }}</span>
+                            </div>
+                            <i class="fa-solid fa-arrow-right text-emerald-500"></i>
+                            <div class="text-left">
+                                <span class="block text-[9px] text-emerald-500 font-bold">APÓS MOVER</span>
+                                <span class="text-emerald-300 font-bold">{{ s.destino_depois }}/{{ s.destino_cap }}</span>
+                            </div>
+                        </div>
                     </div>
 
                 </div>

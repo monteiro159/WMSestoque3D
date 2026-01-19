@@ -4,55 +4,58 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WMS A Lusitana</title>
-    
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
     <nav class="bg-slate-800 border-b border-slate-700 shadow-xl sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
                 
-                <div class="flex items-center gap-3">
+                <a href="{% url 'home' %}" class="flex items-center gap-3 hover:opacity-80 transition">
                     <div class="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center shadow-lg border border-amber-400/30">
                         <i class="fa-solid fa-boxes-stacked text-white text-lg"></i>
                     </div>
-                    <div class="leading-tight">
+                    <div class="leading-tight hidden md:block">
                         <h1 class="font-black text-xl tracking-tight text-white">WMS <span class="text-amber-500">LUSITANA</span></h1>
-                        <p class="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Logística Inteligente</p>
                     </div>
-                </div>
+                </a>
 
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
                     
-                    <a href="{% url 'upload' %}" class="hidden md:flex bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm font-semibold items-center gap-2 transition border border-slate-600">
+                    <a href="{% url 'upload' %}" class="flex bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm font-semibold items-center gap-2 transition border border-slate-600 whitespace-nowrap">
                         <i class="fa-solid fa-cloud-arrow-up"></i>
-                        <span>Importar</span>
+                        <span class="hidden md:inline">Importar</span>
                     </a>
 
-                    <a href="{% url 'home' %}" class="flex bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition hover:scale-105 border border-emerald-400/50">
+                    <a href="{% url 'home' %}" class="flex bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition border border-emerald-400/50 whitespace-nowrap">
                         <i class="fa-solid fa-map"></i>
                         <span class="hidden md:inline">MAPA</span>
                     </a>
 
-                    <a href="{% url 'fefo' %}" class="flex bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition hover:scale-105 border border-amber-400/50">
+                    <a href="{% url 'fefo' %}" class="flex bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition border border-amber-400/50 whitespace-nowrap">
                         <i class="fa-solid fa-stopwatch"></i>
                         <span class="hidden md:inline">FEFO</span>
                     </a>
 
-                    <a href="{% url 'picking' %}" class="flex bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition hover:scale-105 border border-blue-400/50">
+                    <a href="{% url 'picking' %}" class="flex bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition border border-blue-400/50 whitespace-nowrap">
                         <i class="fa-solid fa-dolly"></i>
                         <span class="hidden md:inline">PICKING</span>
                     </a>
-                    
-                    <a href="{% url 'consolidacao' %}" class="flex bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition hover:scale-105 border border-purple-400/50">
+
+                    <a href="{% url 'consolidacao' %}" class="flex bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition border border-purple-400/50 whitespace-nowrap">
                         <i class="fa-solid fa-people-carry-box"></i>
                         <span class="hidden md:inline">OTIMIZAR</span>
                     </a>
@@ -63,22 +66,11 @@
     </nav>
 
     <main class="flex-grow container mx-auto px-2 py-6">
-        
         {% if messages %}
             <div class="mb-6 max-w-4xl mx-auto space-y-2">
                 {% for message in messages %}
-                    <div class="p-4 rounded-lg shadow-lg border-l-4 flex items-center justify-between
-                        {% if message.tags == 'success' %}bg-emerald-900/50 border-emerald-500 text-emerald-200{% endif %}
-                        {% if message.tags == 'error' %}bg-rose-900/50 border-rose-500 text-rose-200{% endif %}
-                        {% if message.tags == 'warning' %}bg-amber-900/50 border-amber-500 text-amber-200{% endif %}">
-                        <div class="flex items-center gap-3">
-                            <i class="fa-solid 
-                                {% if message.tags == 'success' %}fa-circle-check{% endif %}
-                                {% if message.tags == 'error' %}fa-circle-exclamation{% endif %}
-                                {% if message.tags == 'warning' %}fa-triangle-exclamation{% endif %}">
-                            </i>
-                            <span>{{ message }}</span>
-                        </div>
+                    <div class="p-4 rounded-lg shadow-lg border-l-4 flex items-center gap-3 text-white bg-slate-800 border-slate-500">
+                        <span>{{ message }}</span>
                     </div>
                 {% endfor %}
             </div>
@@ -86,16 +78,12 @@
 
         {% block content %}
         {% endblock %}
-        
     </main>
 
     <footer class="bg-slate-950 border-t border-slate-800 py-6 mt-auto">
         <div class="max-w-7xl mx-auto px-4 text-center">
-            <p class="text-slate-500 text-sm">
-                &copy; {% now "Y" %} <strong>A Lusitana</strong> WMS. Desenvolvido com <i class="fa-solid fa-heart text-rose-500 mx-1"></i> e Python.
-            </p>
+            <p class="text-slate-500 text-sm">WMS A Lusitana &copy; {% now "Y" %}</p>
         </div>
     </footer>
-
 </body>
 </html>

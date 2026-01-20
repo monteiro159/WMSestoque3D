@@ -3,8 +3,8 @@ from django.db import models
 # --- PARTE 1: ESTRUTURA FÍSICA (LAYOUT) ---
 class LayoutArmazem(models.Model):
     # Identificadores
-    gp = models.IntegerField(verbose_name="Galpão (GP)")
-    rua = models.IntegerField(primary_key=True, verbose_name="Código Rua (ID)") 
+    gp = models.IntegerField(default=1)
+    rua = models.CharField(max_length=50, verbose_name="Rua / Endereço") 
     
     # Geometria
     largura_colunas = models.IntegerField(verbose_name="Largura (Colunas)")

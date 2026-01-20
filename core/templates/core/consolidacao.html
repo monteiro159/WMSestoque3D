@@ -11,7 +11,6 @@
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        
         <div class="bg-gradient-to-br from-emerald-900/40 to-slate-800 rounded-xl p-5 border border-emerald-500/30 shadow-lg flex items-center justify-between">
             <div>
                 <p class="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">Ruas a Liberar</p>
@@ -48,33 +47,50 @@
     {% if movimentos_feitos %}
         <div class="mb-8 space-y-4 animate-fade-in-down">
             <h2 class="text-slate-400 text-sm font-bold uppercase tracking-wider flex items-center gap-2">
-                <i class="fa-solid fa-check-double text-emerald-500"></i> Realizados Recentemente
+                <i class="fa-solid fa-clock-rotate-left text-emerald-500"></i> Realizados Recentemente
             </h2>
             
             {% for feito in movimentos_feitos %}
-            <div class="bg-slate-800/40 rounded-xl border border-emerald-900/50 p-4 flex flex-col md:flex-row items-center justify-between gap-4 opacity-75 hover:opacity-100 transition relative overflow-hidden">
+            <div class="bg-slate-800/40 rounded-xl border border-emerald-900/50 p-4 flex flex-col md:flex-row items-center justify-between gap-4 transition relative overflow-hidden group hover:bg-slate-800">
                 
                 <div class="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
 
-                <div class="flex items-center gap-4">
+                <div class="flex items-center gap-4 flex-1">
                     <div class="w-10 h-10 rounded-full bg-emerald-900/50 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
                         <i class="fa-solid fa-check"></i>
                     </div>
                     <div>
-                        <h3 class="font-bold text-slate-300 line-through decoration-slate-500">{{ feito.produto }}</h3>
-                        <p class="text-xs text-slate-500">SKU: {{ feito.sku }}</p>
+                        <h3 class="font-bold text-slate-300">{{ feito.produto }}</h3>
+                        <p class="text-xs text-slate-500 mb-1">SKU: {{ feito.sku }} | Hora: {{ feito.hora }}</p>
+                        
+                        <div class="flex gap-3 text-[10px] uppercase font-bold">
+                            <span class="text-blue-400" title="Supervisor"><i class="fa-solid fa-user-tie"></i> {{ feito.supervisor }}</span>
+                            <span class="text-orange-400" title="Operador"><i class="fa-solid fa-dolly"></i> {{ feito.operador }}</span>
+                        </div>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-3 text-sm font-mono text-slate-400 bg-slate-900/50 px-4 py-2 rounded-lg border border-slate-700/50">
-                    <span class="line-through">Rua {{ feito.origem_rua }}</span>
+                    <span class="line-through decoration-rose-500 decoration-2">Rua {{ feito.origem_rua }}</span>
                     <i class="fa-solid fa-arrow-right text-emerald-600"></i>
                     <span class="text-emerald-500 font-bold">Rua {{ feito.destino_rua }}</span>
                     <span class="ml-2 text-xs bg-emerald-900 text-emerald-300 px-2 py-0.5 rounded">{{ feito.qtd }} pal</span>
                 </div>
 
-                <div class="px-4 hidden md:block">
-                    <span class="text-emerald-500 font-black text-xl tracking-widest opacity-50">OK</span>
+                <div>
+                    <form action="{% url 'reverter_consolidacao' %}" method="POST" class="form-desfazer">
+                        {% csrf_token %}
+                        <input type="hidden" name="origem_id" value="{{ feito.origem_id }}">
+                        <input type="hidden" name="destino_id" value="{{ feito.destino_id }}">
+                        <input type="hidden" name="sku" value="{{ feito.sku }}">
+                        <input type="hidden" name="qtd" value="{{ feito.qtd }}">
+                        <input type="hidden" name="validade" value="{{ feito.validade }}">
+                        <input type="hidden" name="id_unico" value="{{ feito.id_unico }}">
+                        
+                        <button type="button" class="btn-desfazer text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 p-2 rounded-full transition-all" title="Desfazer Movimentação (Estornar)">
+                            <i class="fa-solid fa-rotate-left"></i> <span class="text-xs font-bold ml-1">Desfazer</span>
+                        </button>
+                    </form>
                 </div>
             </div>
             {% endfor %}
@@ -132,19 +148,23 @@
                     <div class="md:col-span-1 flex flex-col items-center justify-center z-10 py-4 md:py-0">
                         <div class="w-full h-px bg-slate-600 absolute top-1/2 left-0 hidden md:block -z-10"></div>
                         
-                        <form action="{% url 'confirmar_consolidacao' %}" method="POST">
+                        <form action="{% url 'realizar_consolidacao' %}" method="POST" class="flex flex-col items-center gap-3 w-full">
                             {% csrf_token %}
                             <input type="hidden" name="origem_rua_id" value="{{ s.origem_rua_id }}">
                             <input type="hidden" name="destino_rua_id" value="{{ s.destino_rua_id }}">
                             <input type="hidden" name="sku" value="{{ s.sku }}">
                             <input type="hidden" name="validade" value="{{ s.validade }}">
-
                             <input type="hidden" name="produto_nome" value="{{ s.produto }}">
                             <input type="hidden" name="origem_nome" value="{{ s.origem_rua }}">
                             <input type="hidden" name="destino_nome" value="{{ s.destino_rua }}">
                             <input type="hidden" name="qtd" value="{{ s.qtd_mover }}">
                             <input type="hidden" name="gp_origem" value="{{ s.origem_gp }}">
                             <input type="hidden" name="gp_destino" value="{{ s.destino_gp }}">
+
+                            <div class="flex flex-col gap-2 w-full max-w-[140px]">
+                                <input type="text" name="supervisor" placeholder="Supervisor" required class="bg-slate-900 border border-slate-600 text-white text-[10px] rounded px-2 py-1 w-full text-center uppercase placeholder-slate-600 focus:border-emerald-500 outline-none">
+                                <input type="text" name="operador" placeholder="Operador" required class="bg-slate-900 border border-slate-600 text-white text-[10px] rounded px-2 py-1 w-full text-center uppercase placeholder-slate-600 focus:border-emerald-500 outline-none">
+                            </div>
 
                             <button type="submit" class="group/btn relative" title="Confirmar Movimentação">
                                 <div class="bg-slate-700 group-hover/btn:bg-emerald-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-4 border-slate-800 transition-all duration-100 cursor-pointer active:scale-95 hover:scale-110 hover:shadow-emerald-500/50">
@@ -153,7 +173,7 @@
                             </button>
                         </form>
 
-                        <span class="mt-3 bg-slate-800 text-slate-300 text-[10px] font-bold px-3 py-1 rounded-full border border-slate-600 shadow-sm">
+                        <span class="mt-2 bg-slate-800 text-slate-300 text-[10px] font-bold px-3 py-1 rounded-full border border-slate-600 shadow-sm">
                             MOVER {{ s.qtd_mover }}
                         </span>
                     </div>
@@ -185,4 +205,36 @@
         </div>
     {% endif %}
 </div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const botoes = document.querySelectorAll('.btn-desfazer');
+
+        botoes.forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault(); // Impede o envio imediato
+                
+                const form = this.closest('form'); // Pega o formulário pai
+
+                Swal.fire({
+                    title: 'Tem certeza?',
+                    text: "O produto voltará para a Rua de Origem e sairá do Destino.",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#e11d48', // Vermelho Rose
+                    cancelButtonColor: '#64748b', // Cinza Slate
+                    confirmButtonText: 'Sim, desfazer!',
+                    cancelButtonText: 'Cancelar',
+                    background: '#1e293b', // Fundo Escuro (Slate-800)
+                    color: '#f8fafc', // Texto Claro
+                    iconColor: '#fbbf24' // Ícone Amarelo
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        form.submit(); // Envia o formulário se confirmar
+                    }
+                });
+            });
+        });
+    });
+</script>
+
 {% endblock %}

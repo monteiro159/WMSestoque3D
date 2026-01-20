@@ -1,35 +1,71 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Upload de Estoque</title>
-    <style>
-        body { background-color: #1a202c; color: #e2e8f0; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background-color: #2d3748; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 400px; }
-        h2 { color: #fff; margin-top: 0; }
-        button { background-color: #48bb78; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
-        button:hover { background-color: #38a169; }
-        input, select { width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #4a5568; background: #1a202c; color: white; }
-        .alert { padding: 10px; background-color: #c53030; color: white; margin-bottom: 15px; border-radius: 4px; }
-        .success { background-color: #2f855a; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>📥 Importar Estoque</h2>
-        
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert {% if message.tags == 'success' %}success{% endif %}">
-                    {{ message }}
-                </div>
-            {% endfor %}
-        {% endif %}
+{% extends 'core/base.html' %}
 
-        <form method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-            {{ form.as_p }}
-            <button type="submit">Processar Arquivo</button>
-        </form>
+{% block content %}
+<div class="max-w-2xl mx-auto mt-10 animate-fade-in-down">
+    
+    <div class="mb-8 text-center">
+        <h1 class="text-3xl font-bold text-white mb-2 flex justify-center items-center gap-3">
+            <i class="fa-solid fa-file-excel text-emerald-500"></i>
+            Atualizar Estoque
+        </h1>
+        <p class="text-slate-400">Importe sua planilha Excel (.xlsx) para renovar o WMS.</p>
     </div>
-</body>
-</html>
+
+    <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-2xl p-8 relative overflow-hidden">
+        
+        <div class="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl"></div>
+        <div class="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"></div>
+
+        <form method="post" enctype="multipart/form-data" class="space-y-6 relative z-10">
+            {% csrf_token %}
+
+            <div class="flex items-center justify-center w-full">
+                <label for="dropzone-file" class="flex flex-col items-center justify-center w-full h-64 border-2 border-slate-600 border-dashed rounded-lg cursor-pointer bg-slate-700/50 hover:bg-slate-700 hover:border-emerald-500 transition-all group hover:scale-[1.02]">
+                    <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                        <div class="w-16 h-16 mb-4 rounded-full bg-slate-800 flex items-center justify-center group-hover:bg-emerald-500/20 group-hover:text-emerald-400 transition-colors">
+                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 group-hover:text-emerald-400"></i>
+                        </div>
+                        
+                        <p class="mb-2 text-sm text-slate-300"><span class="font-bold text-emerald-400">Clique para escolher</span> ou arraste o arquivo</p>
+                        <p class="text-xs text-slate-500">Suporta apenas arquivos .XLSX (Excel)</p>
+                        
+                        <p id="file-name" class="mt-4 text-sm font-mono text-emerald-300 font-bold hidden"></p>
+                    </div>
+                    
+                    <input id="dropzone-file" type="file" name="arquivo" class="hidden" accept=".xlsx" required onchange="mostrarNome(this)" />
+                </label>
+            </div>
+
+            <button type="submit" class="w-full text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 focus:ring-4 focus:outline-none focus:ring-emerald-800 font-bold rounded-lg text-sm px-5 py-4 text-center flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg shadow-emerald-900/50">
+                <i class="fa-solid fa-gears"></i>
+                PROCESSAR E ATUALIZAR
+            </button>
+        </form>
+
+    </div>
+
+    <div class="mt-8 text-center bg-slate-800/50 p-4 rounded-lg border border-slate-700/50">
+        <p class="text-xs text-slate-400">
+            <i class="fa-solid fa-circle-info mr-1 text-blue-400"></i>
+            Certifique-se que sua planilha tenha as colunas: 
+            <span class="font-mono text-emerald-400 bg-slate-900 px-1 rounded">Rua</span>, 
+            <span class="font-mono text-emerald-400 bg-slate-900 px-1 rounded">SKU</span>, 
+            <span class="font-mono text-emerald-400 bg-slate-900 px-1 rounded">Descricao</span>, 
+            <span class="font-mono text-emerald-400 bg-slate-900 px-1 rounded">Quantidade</span>, 
+            <span class="font-mono text-emerald-400 bg-slate-900 px-1 rounded">Validade</span>.
+        </p>
+    </div>
+</div>
+
+<script>
+    function mostrarNome(input) {
+        const p = document.getElementById('file-name');
+        if (input.files && input.files.length > 0) {
+            p.textContent = "Arquivo selecionado: " + input.files[0].name;
+            p.classList.remove('hidden');
+        } else {
+            p.classList.add('hidden');
+        }
+    }
+</script>
+{% endblock %}

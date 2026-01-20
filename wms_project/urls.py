@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path
-from core import views  # <--- O JEITO CERTO (Importa o arquivo todo)
+from core import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -18,8 +18,12 @@ urlpatterns = [
     # Operação (Picking)
     path('picking/', views.picking_busca, name='picking'),
     
+    # === OTIMIZAÇÃO / CONSOLIDAÇÃO ===
     path('consolidacao/', views.sugestao_consolidacao, name='consolidacao'),
     
-    path('consolidar/confirmar/', views.realizar_consolidacao, name='confirmar_consolidacao'),
-
+    # CORREÇÃO AQUI: O 'name' mudou de 'confirmar_consolidacao' para 'realizar_consolidacao'
+    # para bater com o código que está no HTML ({% url 'realizar_consolidacao' %})
+    path('consolidacao/realizar/', views.realizar_consolidacao, name='realizar_consolidacao'),
+    
+    path('consolidacao/reverter/', views.reverter_consolidacao, name='reverter_consolidacao'),
 ]

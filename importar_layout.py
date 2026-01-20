@@ -1,42 +1,78 @@
+import os
+import django
 import pandas as pd
+
+# 1. Configuração do Django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'wms_project.settings')
+django.setup()
+
 from core.models import LayoutArmazem
 
-def importar_layout_inicial(caminho_do_csv):
-    """
-    Lê o CSV de dados e popula o banco de dados.
-    """
-    # ATENÇÃO: sep=';' define que estamos usando ponto-e-vírgula como separador
-    try:
-        df = pd.read_csv(caminho_do_csv, sep=';')
-    except Exception as e:
-        print(f"Erro ao ler arquivo: {e}")
-        return
-
-    # Limpa espaços em branco nos nomes das colunas (ex: " RUA " vira "RUA")
-    df.columns = df.columns.str.strip()
-
-    objetos_para_criar = []
+def importar_layout():
+    caminho_csv = 'layout_armazem.csv'
+    print(f"Lendo arquivo: {caminho_csv}...")
     
-    print("Iniciando importação...")
+    try:
+        df = pd.read_csv(caminho_csv, sep=';', encoding='utf-8-sig')
+        df.columns = df.columns.str.strip()
+        
+        contador_novos = 0
+        contador_atualizados = 0
 
-    for index, row in df.iterrows():
-        try:
-            obj = LayoutArmazem(
-                gp=row['GP'],
-                rua=row['RUA'],
-                largura_colunas=row['Coluna'],
-                base_footprint=row['base foot_print'],
-                cap_nivel_1=row['TOTAL 1 ALTURA'],
-                cap_nivel_2=row['TOTAL 2 ALTURA'],
-                cap_maxima=row['TOTAL 3 ALTURA'],
-                tipo_armazem=row['TIPO ARMAZEM'],
-                altura_max_perm=row['ALTURA_MAX']
-            )
-            objetos_para_criar.append(obj)
-        except KeyError as e:
-            print(f"Erro na linha {index}: Coluna {e} não encontrada.")
-            return
+        print("Iniciando processamento no Banco de Dados...")
 
-    # Salva no banco
-    LayoutArmazem.objects.bulk_create(objetos_para_criar, ignore_conflicts=True)
-    print(f"Sucesso! {len(objetos_para_criar)} ruas cadastradas.")
+        for index, row in df.iterrows():
+            try:
+                def tratar_numero(valor):
+                    return float(str(valor).replace(',', '.'))
+
+                largura = tratar_numero(row['Coluna'])
+                footprint = tratar_numero(row['base foot_print'])
+                
+                # Pegamos as capacidades do CSV
+                cap1 = int(row['TOTAL 1 ALTURA'])
+                cap2 = int(row['TOTAL 2 ALTURA'])
+                # cap3 = int(row['TOTAL 3 ALTURA']) # Ignoramos pois o banco não tem o campo
+                
+                # Calculamos o total (mesmo que o banco não salve o nível 3 separado,
+                # podemos somar ele no total geral se quiser, ou ignorar)
+                # Vamos somar apenas o que cabe nos niveis existentes
+                total_capacidade = cap1 + cap2 
+
+                obj, created = LayoutArmazem.objects.update_or_create(
+                    rua=str(row['RUA']),
+                    defaults={
+                        'gp': int(row['GP']),
+                        'largura_colunas': largura,
+                        'base_footprint': footprint,
+                        
+                        'cap_nivel_1': cap1,
+                        'cap_nivel_2': cap2,
+                        # 'cap_nivel_3': cap3, <--- REMOVIDO
+                        
+                        'cap_maxima': total_capacidade,
+                        'tipo_armazem': row['TIPO ARMAZEM'],
+                        
+                        # 'nivel': 1, <--- REMOVIDO
+                        'altura_galpao': 10.0,
+                        'profundidade_longarinas': 1.0
+                    }
+                )
+
+                if created: contador_novos += 1
+                else: contador_atualizados += 1
+
+            except KeyError as e:
+                print(f"Erro na linha {index}: Coluna {e} não encontrada.")
+            except Exception as e:
+                print(f"Erro genérico na linha {index}: {e}")
+
+        print(f"CONCLUÍDO! Criados: {contador_novos} | Atualizados: {contador_atualizados}")
+
+    except FileNotFoundError:
+        print(f"ERRO: Arquivo '{caminho_csv}' não encontrado.")
+    except Exception as e:
+        print(f"ERRO CRÍTICO: {e}")
+
+if __name__ == '__main__':
+    importar_layout()

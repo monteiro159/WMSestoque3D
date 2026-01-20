@@ -3,12 +3,14 @@ from django.contrib import messages
 from django.db.models import Sum, Q, Count, Max, Min
 from datetime import date, datetime
 import pandas as pd
+import unicodedata  # <--- O IMPORT QUE FALTAVA ESTÁ AQUI!
+
 from .models import LayoutArmazem, InventarioDiario, Produto, Cliente
 
 # =============================================================================
 # 1. DASHBOARD E MAPA (HOME)
 # =============================================================================
-def dashboard_armazem(request, galpao_id=0): # <--- CORRIGIDO: galpao_id
+def dashboard_armazem(request, galpao_id=0):
     # Filtros Básicos
     filtro_produto = request.GET.get('produto', '').strip()
     filtro_status = request.GET.get('status', '') 
@@ -19,7 +21,7 @@ def dashboard_armazem(request, galpao_id=0): # <--- CORRIGIDO: galpao_id
 
     # Base de Ruas (Layout)
     ruas = LayoutArmazem.objects.all().order_by('gp', 'rua')
-    if galpao_id > 0: # <--- Usando galpao_id
+    if galpao_id > 0:
         ruas = ruas.filter(gp=galpao_id)
 
     # Base de Estoque (Apenas data mais recente)
@@ -85,7 +87,7 @@ def dashboard_armazem(request, galpao_id=0): # <--- CORRIGIDO: galpao_id
 
     return render(request, 'core/dashboard.html', {
         'mapa': mapa,
-        'galpao': galpao_id, # <--- Enviando galpao_id
+        'galpao': galpao_id,
         'lista_galpoes': lista_galpoes,
         'total_geral': total_geral,
         'top_produto': top_produto,
@@ -97,7 +99,7 @@ def dashboard_armazem(request, galpao_id=0): # <--- CORRIGIDO: galpao_id
     })
 
 # =============================================================================
-# 2. UPLOAD DE EXCEL
+# 2. UPLOAD DE EXCEL (VERSÃO FINAL QUE ACEITA TUDO)
 # =============================================================================
 def upload_inventario(request):
     if request.method == 'POST' and request.FILES.get('arquivo'):
@@ -105,35 +107,96 @@ def upload_inventario(request):
         
         try:
             df = pd.read_excel(arquivo)
-            df.columns = [c.lower().strip().replace(' ', '_') for c in df.columns]
             
+            # Limpeza
+            def limpar_header(texto):
+                if isinstance(texto, str):
+                    texto_sem_acento = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8')
+                    return texto_sem_acento.lower().strip().replace(' ', '_').replace('.', '')
+                return str(texto).lower().strip()
+
+            df.columns = [limpar_header(c) for c in df.columns]
+            
+            # Mapeamento
+            mapa_colunas = {
+                'endereco': 'rua',
+                'item': 'sku',
+                'material': 'descricao',
+                'lote_enchimento': 'lote',
+                'producao_shelf': 'producao',
+                'validade': 'validade',
+                'quantidade': 'quantidade',
+                'fracao': 'fracao',
+                'status': 'status'
+            }
+            df.rename(columns=mapa_colunas, inplace=True)
+            
+            # Validação
+            colunas_obrigatorias = ['rua', 'sku', 'descricao']
+            faltantes = [col for col in colunas_obrigatorias if col not in df.columns]
+            if faltantes:
+                messages.error(request, f"Faltando colunas: {', '.join(faltantes)}")
+                return redirect('upload')
+
+            # Processamento
             data_hoje = date.today()
             InventarioDiario.objects.filter(data_referencia=data_hoje).delete()
             
             registros = []
+            ruas_novas = []
+
             for index, row in df.iterrows():
-                rua_nome = str(row['rua'])
-                rua_obj, _ = LayoutArmazem.objects.get_or_create(
+                rua_nome = str(row['rua']).strip()
+                
+                rua_obj, created = LayoutArmazem.objects.get_or_create(
                     rua=rua_nome,
-                    defaults={'gp': 1, 'cap_maxima': 100, 'nivel': 1}
+                    defaults={
+                        'gp': 1, 'cap_maxima': 100, 'largura_colunas': 1.0, 
+                        'base_footprint': 1.0, 'cap_nivel_1': 0, 'cap_nivel_2': 0
+                    }
                 )
+                if created: ruas_novas.append(rua_nome)
                 
                 validade = row.get('validade')
-                if pd.isnull(validade): validade = None
-                
+                if pd.isnull(validade) or str(validade).strip() == '': validade = None
                 producao = row.get('producao')
-                if pd.isnull(producao): producao = None
+                if pd.isnull(producao) or str(producao).strip() == '': producao = None
+
+                # === NOVA LÓGICA DECIMAL (0 + 3 = 0.3) ===
+                
+                # 1. Trata a Quantidade (Inteiro)
+                try:
+                    q_val = row.get('quantidade')
+                    qtd_int = int(float(q_val)) if pd.notnull(q_val) and str(q_val).strip() != '' else 0
+                except:
+                    qtd_int = 0
+
+                # 2. Trata a Fração (Decimal)
+                try:
+                    f_val = row.get('fracao')
+                    fracao_int = int(float(f_val)) if pd.notnull(f_val) and str(f_val).strip() != '' else 0
+                except:
+                    fracao_int = 0
+                
+                # 3. Junta os dois visualmente (Ex: 10 e 3 vira 10.3)
+                # Se a fração for 0, fica apenas o inteiro (Ex: 10.0)
+                # Se a fração for 3, e qtd 0, fica 0.3
+                try:
+                    str_valor_final = f"{qtd_int}.{fracao_int}"
+                    qtd_final = float(str_valor_final)
+                except:
+                    qtd_final = 0.0
 
                 registros.append(InventarioDiario(
                     data_referencia=data_hoje,
                     rua=rua_obj,
                     sku=str(row['sku']),
                     descricao=row['descricao'],
-                    quantidade_paletes=row['quantidade'],
+                    quantidade_paletes=qtd_final, # Agora vai salvo como 0.3
                     data_validade=validade,
                     data_producao=producao,
                     lote=str(row.get('lote', '')),
-                    status='DISPONIVEL'
+                    status=str(row.get('status', 'DISPONIVEL'))
                 ))
             
             InventarioDiario.objects.bulk_create(registros)
@@ -144,51 +207,118 @@ def upload_inventario(request):
                     defaults={'descricao': reg.descricao}
                 )
 
-            messages.success(request, f"Importação concluída! {len(registros)} itens carregados.")
+            if ruas_novas:
+                qtd_novas = len(ruas_novas)
+                exemplo = ", ".join(ruas_novas[:3])
+                messages.warning(request, f"⚠️ Atenção: {qtd_novas} novas ruas criadas ({exemplo}).")
+            else:
+                messages.success(request, f"Sucesso! {len(registros)} itens importados.")
+                
             return redirect('home')
 
         except Exception as e:
-            messages.error(request, f"Erro ao processar arquivo: {str(e)}")
+            messages.error(request, f"Erro: {str(e)}")
             return redirect('upload')
 
     return render(request, 'core/upload.html')
-
 # =============================================================================
-# 3. RELATÓRIO FEFO (CORRIGIDO PARA BUSCAR DADOS RECENTES)
+# 3. RELATÓRIO FEFO
 # =============================================================================
 def radar_fefo(request):
-    # Pega o último dia com dados
     ultimo_registro = InventarioDiario.objects.order_by('-data_referencia').first()
     if not ultimo_registro:
-        # Se não tiver dados nenhum, renderiza vazio
-        return render(request, 'core/fefo.html', {'lista': []})
+        return render(request, 'core/fefo.html', {'lista': [], 'kpis': {}})
     
     data_ref = ultimo_registro.data_referencia
     hoje = date.today()
 
-    # Busca itens DESSA data específica
     itens = InventarioDiario.objects.filter(
         data_referencia=data_ref, 
         data_validade__isnull=False
     ).select_related('rua').order_by('data_validade')
     
     fefo_data = []
+    
+    kpis = {
+        'vencidos': 0, 'criticos': 0, 'atencao': 0, 'ok': 0, 'duraveis': 0
+    }
+
+    # === LISTA DE SKUs IMUNES (RPM/INSUMOS/BARRIS) ===
+    # Coloquei como strings ('...') para garantir que bata com o banco de dados
+    skus_duraveis = [
+        '237857', '654013', '654014', '636878', '230121', '215443', '250985',
+        '215442', '2154421', '2494', '24941', '49721', '49719', '107381',
+        '1073811', '2482', '163974'
+    ]
+
     for item in itens:
-        dias = (item.data_validade - hoje).days
-        status_cor = "bg-emerald-500"
-        if dias < 30: status_cor = "bg-red-600 animate-pulse"
-        elif dias < 90: status_cor = "bg-amber-500"
+        # Verifica se o SKU do item está na lista de duráveis
+        # Usamos str() e strip() para garantir que espaços vazios não atrapalhem
+        sku_atual = str(item.sku).strip()
+        eh_duravel = sku_atual in skus_duraveis
+
+        if eh_duravel:
+            # LÓGICA PARA INSUMOS (Não vence)
+            dias_restantes = 9999 
+            vida_total_dias = 100
+            pct_restante = 100
+            status_texto = "DURÁVEL"
+            status_cor = "bg-blue-600" # Azul
+            kpis['duraveis'] += item.quantidade_paletes
         
+        else:
+            # LÓGICA PADRÃO (PA - PRODUTO ACABADO)
+            dias_restantes = (item.data_validade - hoje).days
+            
+            if item.data_producao:
+                vida_total_dias = (item.data_validade - item.data_producao).days
+            else:
+                vida_total_dias = 180 
+            
+            if vida_total_dias <= 0: vida_total_dias = 1
+
+            dias_vividos = vida_total_dias - dias_restantes
+            pct_vivida = (dias_vividos / vida_total_dias) * 100
+            pct_restante = 100 - pct_vivida
+
+            # Definição de Status
+            status_texto = "OK"
+            status_cor = "bg-emerald-500"
+            
+            if dias_restantes < 0:
+                status_texto = "VENCIDO"
+                status_cor = "bg-rose-600 animate-pulse"
+                kpis['vencidos'] += item.quantidade_paletes
+
+            elif pct_restante <= 33: 
+                status_texto = "CRÍTICO"
+                status_cor = "bg-orange-600"
+                kpis['criticos'] += item.quantidade_paletes
+
+            elif pct_restante <= 66:
+                status_texto = "ATENÇÃO"
+                status_cor = "bg-amber-500"
+                kpis['atencao'] += item.quantidade_paletes
+            
+            else:
+                kpis['ok'] += item.quantidade_paletes
+
         fefo_data.append({
             'item': item,
-            'dias_vencimento': dias,
+            'dias_vencimento': dias_restantes,
+            'vida_total': vida_total_dias,
+            'pct_restante': int(pct_restante),
+            'status_texto': status_texto,
             'status_cor': status_cor
         })
+    
+    # Ordena: Vencidos -> Críticos -> Atenção -> OK -> Duráveis
+    prioridade_map = {'VENCIDO': 1, 'CRÍTICO': 2, 'ATENÇÃO': 3, 'OK': 4, 'DURÁVEL': 5}
+    fefo_data.sort(key=lambda x: prioridade_map.get(x['status_texto'], 5))
 
-    return render(request, 'core/fefo.html', {'lista': fefo_data})
-
+    return render(request, 'core/fefo.html', {'lista': fefo_data, 'kpis': kpis})
 # =============================================================================
-# 4. PICKING (CORRIGIDO PARA BUSCAR DADOS RECENTES)
+# 4. PICKING
 # =============================================================================
 def picking_busca(request):
     termo = request.GET.get('q', '').strip()
@@ -199,27 +329,24 @@ def picking_busca(request):
     cliente_selecionado = None
 
     if termo:
-        # Pega data mais recente
         ultimo_registro = InventarioDiario.objects.order_by('-data_referencia').first()
         data_ref = ultimo_registro.data_referencia if ultimo_registro else date.today()
 
         itens_brutos = InventarioDiario.objects.filter(
             Q(sku__icontains=termo) | Q(descricao__icontains=termo),
-            data_referencia=data_ref # <--- Filtro de Data Importante
+            data_referencia=data_ref 
         ).exclude(data_validade__isnull=True).select_related('rua').order_by('data_validade')
 
         if cliente_id:
             try:
                 cliente = Cliente.objects.get(id=cliente_id)
                 cliente_selecionado = cliente
-                
                 hoje = date.today()
                 cache_produtos = {p.sku: p for p in Produto.objects.all()}
 
                 for item in itens_brutos:
                     if not item.data_producao or not item.data_validade:
                         continue
-                    
                     passou = False
                     if cliente.tipo_restricao == 'DIAS_PRODUCAO':
                         idade = (hoje - item.data_producao).days
@@ -233,7 +360,6 @@ def picking_busca(request):
                             if pct >= cliente.valor_restricao: passou = True
                         else:
                             passou = True
-
                     if passou: resultados_finais.append(item)
             except Cliente.DoesNotExist:
                 resultados_finais = itens_brutos
@@ -248,7 +374,7 @@ def picking_busca(request):
     })
 
 # =============================================================================
-# 5. OTIMIZAÇÃO (MANTIDO IGUAL, JÁ ESTAVA CORRETO)
+# 5. OTIMIZAÇÃO
 # =============================================================================
 def sugestao_consolidacao(request):
     ultimo_registro = InventarioDiario.objects.order_by('-data_referencia').first()
@@ -351,19 +477,25 @@ def sugestao_consolidacao(request):
     })
 
 # =============================================================================
-# 6. AÇÃO: REALIZAR MOVIMENTAÇÃO (MANTIDO IGUAL)
+# 6. AÇÃO: REALIZAR MOVIMENTAÇÃO
 # =============================================================================
 def realizar_consolidacao(request):
     if request.method == "POST":
+        # Dados do Produto/Local
         origem_rua_id = request.POST.get('origem_rua_id')
         destino_rua_id = request.POST.get('destino_rua_id')
         sku = request.POST.get('sku')
         data_validade_str = request.POST.get('validade')
+        qtd = float(request.POST.get('qtd'))
         
+        # Dados de Rastreabilidade (NOVOS)
+        supervisor = request.POST.get('supervisor', '').upper()
+        operador = request.POST.get('operador', '').upper()
+
+        # Dados apenas visuais para o histórico
         produto_nome = request.POST.get('produto_nome')
         origem_nome = request.POST.get('origem_nome')
         destino_nome = request.POST.get('destino_nome')
-        qtd = request.POST.get('qtd')
         gp_origem = request.POST.get('gp_origem')
         gp_destino = request.POST.get('gp_destino')
 
@@ -372,49 +504,129 @@ def realizar_consolidacao(request):
             if not ultimo: return redirect('consolidacao')
             data_ref = ultimo.data_referencia
 
+            # 1. Busca na Origem
             itens_origem = InventarioDiario.objects.filter(data_referencia=data_ref, rua_id=origem_rua_id, sku=sku)
             if data_validade_str and data_validade_str != 'ND':
                 itens_origem = itens_origem.filter(data_validade=data_validade_str)
 
             if itens_origem.exists():
+                # Remove da Origem
+                ref = itens_origem.first()
                 total_mover = sum(item.quantidade_paletes for item in itens_origem)
-                
+                itens_origem.delete()
+
+                # 2. Adiciona no Destino
+                # Tenta achar item igual no destino para somar
                 item_destino = InventarioDiario.objects.filter(data_referencia=data_ref, rua_id=destino_rua_id, sku=sku).first()
-                if item_destino and data_validade_str and data_validade_str != 'ND':
+                if data_validade_str and data_validade_str != 'ND':
                      item_destino = InventarioDiario.objects.filter(data_referencia=data_ref, rua_id=destino_rua_id, sku=sku, data_validade=data_validade_str).first()
 
                 if item_destino:
                     item_destino.quantidade_paletes += total_mover
                     item_destino.save()
                 else:
-                    ref = itens_origem.first()
+                    # Se não tem, cria novo
                     rua_dest_obj = LayoutArmazem.objects.get(pk=destino_rua_id)
                     InventarioDiario.objects.create(
                         data_referencia=data_ref, rua=rua_dest_obj, sku=ref.sku, descricao=ref.descricao,
                         quantidade_paletes=total_mover, data_validade=ref.data_validade,
-                        data_producao=ref.data_producao, lote=ref.lote, tipo_produto=ref.tipo_produto, status=ref.status
+                        data_producao=ref.data_producao, lote=ref.lote, status=ref.status
                     )
 
-                itens_origem.delete()
-
+                # 3. Salva no Histórico da Sessão
                 feito = {
+                    'id_unico': f"{origem_rua_id}-{destino_rua_id}-{sku}", # ID para poder desfazer depois
                     'produto': produto_nome,
                     'sku': sku,
-                    'origem_rua': origem_nome,
-                    'destino_rua': destino_nome,
-                    'qtd': qtd,
+                    'origem_rua': origem_nome, 'origem_id': origem_rua_id,
+                    'destino_rua': destino_nome, 'destino_id': destino_rua_id,
+                    'qtd': total_mover,
+                    'validade': data_validade_str,
                     'gp_origem': gp_origem,
                     'gp_destino': gp_destino,
-                    'hora': date.today().strftime('%d/%m')
+                    'supervisor': supervisor, # NOVO
+                    'operador': operador,     # NOVO
+                    'hora': datetime.now().strftime('%H:%M')
                 }
                 
                 historico = request.session.get('movimentos_feitos', [])
                 historico.insert(0, feito)
                 request.session['movimentos_feitos'] = historico
                 
-                messages.success(request, "Movimentação registrada com sucesso!")
+                messages.success(request, f"Movimentado com sucesso! (Op: {operador})")
             
         except Exception as e:
             messages.error(request, f"Erro: {str(e)}")
+
+    return redirect('consolidacao')
+
+# =============================================================================
+# 7. AÇÃO: DESFAZER MOVIMENTAÇÃO (UNDO)
+# =============================================================================
+def reverter_consolidacao(request):
+    if request.method == "POST":
+        # Pega os dados do movimento original para inverter
+        origem_id_original = request.POST.get('origem_id')   # Era Origem, vai virar Destino
+        destino_id_original = request.POST.get('destino_id') # Era Destino, vai virar Origem
+        sku = request.POST.get('sku')
+        qtd = float(request.POST.get('qtd'))
+        validade = request.POST.get('validade')
+        id_unico = request.POST.get('id_unico')
+
+        try:
+            ultimo = InventarioDiario.objects.order_by('-data_referencia').first()
+            data_ref = ultimo.data_referencia
+
+            # A LÓGICA INVERSA: Tirar do Destino e devolver para Origem
+            
+            # 1. Tira do Destino (que agora tem o produto)
+            item_no_destino = InventarioDiario.objects.filter(
+                data_referencia=data_ref, rua_id=destino_id_original, sku=sku
+            )
+            if validade and validade != 'ND':
+                item_no_destino = item_no_destino.filter(data_validade=validade)
+            
+            item_dest = item_no_destino.first()
+
+            if item_dest and item_dest.quantidade_paletes >= qtd:
+                # Subtrai a quantidade
+                item_dest.quantidade_paletes -= qtd
+                if item_dest.quantidade_paletes <= 0:
+                    item_dest.delete()
+                else:
+                    item_dest.save()
+
+                # 2. Devolve para a Origem
+                rua_orig_obj = LayoutArmazem.objects.get(pk=origem_id_original)
+                
+                # Tenta achar se já tem algo lá (improvável se esvaziou, mas possível)
+                item_na_origem = InventarioDiario.objects.filter(
+                    data_referencia=data_ref, rua_id=origem_id_original, sku=sku
+                ).first()
+
+                if item_na_origem:
+                    item_na_origem.quantidade_paletes += qtd
+                    item_na_origem.save()
+                else:
+                    # Recria o item na origem (usando dados do item_dest como base para validade/lote)
+                    InventarioDiario.objects.create(
+                        data_referencia=data_ref, rua=rua_orig_obj, sku=sku, 
+                        descricao=item_dest.descricao, quantidade_paletes=qtd, 
+                        data_validade=item_dest.data_validade, data_producao=item_dest.data_producao,
+                        lote=item_dest.lote, status=item_dest.status
+                    )
+
+                # 3. Remove do Histórico da Sessão
+                historico = request.session.get('movimentos_feitos', [])
+                # Filtra removendo o item com aquele ID
+                historico = [h for h in historico if h.get('id_unico') != id_unico]
+                request.session['movimentos_feitos'] = historico
+
+                messages.info(request, "Movimentação desfeita com sucesso! Estoque devolvido.")
+            else:
+                messages.error(request, "Não foi possível desfazer. O saldo no destino já mudou.")
+
+        except Exception as e:
+            messages.error(request, f"Erro ao reverter: {str(e)}")
 
     return redirect('consolidacao')

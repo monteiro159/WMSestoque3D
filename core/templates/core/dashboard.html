@@ -1,216 +1,197 @@
 {% extends 'core/base.html' %}
+{% load static %}
 
 {% block content %}
-<div class="max-w-[1600px] mx-auto space-y-6 animate-fade-in-down">
+<div class="max-w-[1800px] mx-auto space-y-6 animate-fade-in-down">
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-blue-500 transition relative overflow-hidden group">
-            <div class="absolute right-0 top-0 bottom-0 w-1 bg-blue-500"></div>
-            <div class="w-12 h-12 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center text-xl border border-blue-500/20 group-hover:scale-110 transition">
-                <i class="fa-solid fa-boxes-stacked"></i>
+    {% if transitorio.vol > 0 %}
+    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-600/30 rounded-lg p-4 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-4">
+            <div class="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-600/20 text-amber-600 dark:text-amber-500 flex items-center justify-center text-xl animate-pulse">
+                <i class="fa-solid fa-truck-ramp-box"></i>
             </div>
             <div>
-                <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Produtos (Vol. Total)</p>
-                <p class="text-3xl font-black text-white">{{ total_excel }} <span class="text-sm font-normal text-slate-500">vol</span></p>
-                <p class="text-[9px] text-slate-500">Soma s/ PBR</p>
+                <h3 class="text-amber-700 dark:text-amber-500 font-bold text-sm uppercase tracking-wide">Aguardando Armazenagem</h3>
+                <p class="text-xs text-amber-600/70 dark:text-slate-400">Itens em áreas temporárias (Doca/Transitório).</p>
             </div>
         </div>
-
-        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-purple-500 transition relative overflow-hidden group">
-            <div class="absolute right-0 top-0 bottom-0 w-1 bg-purple-500"></div>
-            <div class="w-12 h-12 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center text-xl border border-purple-500/20 group-hover:scale-110 transition">
-                <i class="fa-solid fa-pallet"></i>
-            </div>
-            <div class="w-full">
-                <div class="flex justify-between items-end">
-                    <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">PBR 1</p>
-                    <p class="text-[9px] text-purple-300">{{ pbr_stats.PBR1.fracao }} un</p>
-                </div>
-                <p class="text-2xl font-black text-white">{{ pbr_stats.PBR1.posicoes|floatformat:1 }} <span class="text-sm font-normal text-slate-500">pos</span></p>
-            </div>
-        </div>
-
-        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-pink-500 transition relative overflow-hidden group">
-            <div class="absolute right-0 top-0 bottom-0 w-1 bg-pink-500"></div>
-            <div class="w-12 h-12 rounded-full bg-pink-500/10 text-pink-400 flex items-center justify-center text-xl border border-pink-500/20 group-hover:scale-110 transition">
-                <i class="fa-solid fa-pallet"></i>
-            </div>
-            <div class="w-full">
-                <div class="flex justify-between items-end">
-                    <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">PBR 2</p>
-                    <p class="text-[9px] text-pink-300">{{ pbr_stats.PBR2.fracao }} un</p>
-                </div>
-                <p class="text-2xl font-black text-white">{{ pbr_stats.PBR2.posicoes|floatformat:1 }} <span class="text-sm font-normal text-slate-500">pos</span></p>
-            </div>
+        <div class="text-right">
+            <p class="text-2xl font-black text-amber-800 dark:text-white">{{ transitorio.vol|floatformat:0 }} <span class="text-sm font-normal text-amber-600/70 dark:text-slate-500">vol</span></p>
         </div>
     </div>
+    {% endif %}
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-emerald-500 transition">
-            <div class="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xl border border-emerald-500/20">
-                <i class="fa-solid fa-arrow-trend-up"></i>
-            </div>
-            <div class="overflow-hidden">
-                <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Maior Estoque</p>
-                <p class="text-sm font-bold text-white truncate" title="{{ top_produto.descricao }}">
-                    {{ top_produto.descricao|default:"-" }}
-                </p>
-                <p class="text-xs text-emerald-400 font-mono">{{ top_produto.quantidade_paletes|floatformat:1 }} paletes</p>
-            </div>
-        </div>
-
-        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-rose-500 transition">
-            <div class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center text-xl border border-rose-500/20">
-                <i class="fa-solid fa-arrow-trend-down"></i>
-            </div>
-            <div class="overflow-hidden">
-                <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Menor Estoque</p>
-                <p class="text-sm font-bold text-white truncate" title="{{ bottom_produto.descricao }}">
-                    {{ bottom_produto.descricao|default:"-" }}
-                </p>
-                <p class="text-xs text-rose-400 font-mono">{{ bottom_produto.quantidade_paletes|floatformat:1 }} paletes</p>
-            </div>
-        </div>
-    </div>
-
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <a href="{% url 'picking' %}" class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg hover:bg-slate-700 hover:border-blue-500 transition group flex flex-col items-center justify-center gap-2 text-center h-full">
-            <div class="w-12 h-12 rounded-full bg-blue-900/50 text-blue-400 flex items-center justify-center text-xl group-hover:scale-110 transition shadow-inner">
-                <i class="fa-solid fa-dolly"></i>
-            </div>
-            <div>
-                <h3 class="font-bold text-slate-200">Picking</h3>
-                <p class="text-[10px] text-slate-500 uppercase tracking-wide">Expedição</p>
-            </div>
-        </a>
-
-        <a href="{% url 'fefo' %}" class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg hover:bg-slate-700 hover:border-amber-500 transition group flex flex-col items-center justify-center gap-2 text-center h-full">
-            <div class="w-12 h-12 rounded-full bg-amber-900/50 text-amber-400 flex items-center justify-center text-xl group-hover:scale-110 transition shadow-inner">
-                <i class="fa-solid fa-stopwatch"></i>
-            </div>
-            <div>
-                <h3 class="font-bold text-slate-200">Radar FEFO</h3>
-                <p class="text-[10px] text-slate-500 uppercase tracking-wide">Validade</p>
-            </div>
-        </a>
-
-        <a href="{% url 'consolidacao' %}" class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg hover:bg-slate-700 hover:border-purple-500 transition group flex flex-col items-center justify-center gap-2 text-center h-full">
-            <div class="w-12 h-12 rounded-full bg-purple-900/50 text-purple-400 flex items-center justify-center text-xl group-hover:scale-110 transition shadow-inner">
-                <i class="fa-solid fa-people-carry-box"></i>
-            </div>
-            <div>
-                <h3 class="font-bold text-slate-200">Otimizar</h3>
-                <p class="text-[10px] text-slate-500 uppercase tracking-wide">Consolidação</p>
-            </div>
-        </a>
-
-        <a href="{% url 'upload' %}" class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg hover:bg-slate-700 hover:border-emerald-500 transition group flex flex-col items-center justify-center gap-2 text-center h-full">
-            <div class="w-12 h-12 rounded-full bg-emerald-900/50 text-emerald-400 flex items-center justify-center text-xl group-hover:scale-110 transition shadow-inner">
-                <i class="fa-solid fa-cloud-arrow-up"></i>
-            </div>
-            <div>
-                <h3 class="font-bold text-slate-200">Atualizar</h3>
-                <p class="text-[10px] text-slate-500 uppercase tracking-wide">Importar Excel</p>
-            </div>
-        </a>
-    </div>
-
-    <div class="bg-slate-800/80 rounded-xl border border-slate-700 p-3 flex flex-col lg:flex-row gap-4 justify-between items-center shadow-xl backdrop-blur-sm">
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         
-        <div class="w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
-            <div class="flex gap-2">
-                <a href="{% url 'home' %}" 
-                   class="px-5 py-2.5 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2
-                   {% if galpao == 0 %}bg-amber-600 text-white shadow-lg shadow-amber-900/50{% else %}bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-white{% endif %}">
-                    <i class="fa-solid fa-globe"></i> GLOBAL
-                </a>
-
-                <div class="w-px bg-slate-600 mx-2 h-6 self-center"></div>
-
-                {% for gp_num in lista_galpoes %}
-                <a href="{% url 'dashboard' gp_num %}" 
-                   class="px-4 py-2.5 rounded-lg text-sm font-bold whitespace-nowrap transition-all
-                   {% if galpao == gp_num %}bg-blue-700 text-white shadow-lg shadow-blue-900/50 scale-105{% else %}bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-white{% endif %}">
-                    GP {{ gp_num }}
-                </a>
-                {% endfor %}
-            </div>
-        </div>
-
-        <form method="get" class="flex gap-2 w-full lg:w-auto">
-            <div class="relative w-full lg:w-72">
-                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3.5 text-slate-500 text-xs"></i>
-                <input type="text" name="produto" value="{{ filtro_produto }}" placeholder="Buscar produto..." 
-                       class="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-lg pl-9 pr-3 py-2.5 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition placeholder-slate-500">
+        <div class="bg-white dark:bg-slate-800 rounded-xl border-t-4 border-emerald-500 shadow-lg p-5 border-x border-b border-gray-100 dark:border-slate-700 transition-colors">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h2 class="text-emerald-600 dark:text-emerald-500 font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-beer-mug-empty"></i> P.A.
+                    </h2>
+                    <p class="text-[9px] text-slate-400 dark:text-slate-500">Venda (Cerveja/Refri)</p>
+                </div>
+                <p class="text-2xl font-black text-slate-800 dark:text-white">{{ stats.PA.vol|floatformat:0 }} <span class="text-[10px] font-normal text-slate-400">vol</span></p>
             </div>
             
-            <select name="status" class="bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-500 outline-none">
+            <div class="bg-gray-50 dark:bg-slate-900/50 rounded-lg p-2 border border-gray-100 dark:border-slate-700/50">
+                <p class="text-[9px] text-slate-400 uppercase font-bold mb-1">Top Item</p>
+                {% if stats.PA.maior_item %}
+                    <p class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate" title="{{ stats.PA.maior_item.descricao }}">{{ stats.PA.maior_item.descricao }}</p>
+                    <p class="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">{{ stats.PA.maior_qtd|floatformat:0 }} un</p>
+                {% else %}
+                    <p class="text-xs text-slate-400 italic">Sem estoque</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-800 rounded-xl border-t-4 border-blue-500 shadow-lg p-5 border-x border-b border-gray-100 dark:border-slate-700 transition-colors">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h2 class="text-blue-600 dark:text-blue-500 font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-boxes-packing"></i> Insumos
+                    </h2>
+                    <p class="text-[9px] text-slate-400 dark:text-slate-500">Matéria Prima</p>
+                </div>
+                <p class="text-2xl font-black text-slate-800 dark:text-white">{{ stats.INSUMO.vol|floatformat:0 }} <span class="text-[10px] font-normal text-slate-400">vol</span></p>
+            </div>
+            
+            <div class="bg-gray-50 dark:bg-slate-900/50 rounded-lg p-2 border border-gray-100 dark:border-slate-700/50">
+                <p class="text-[9px] text-slate-400 uppercase font-bold mb-1">Top Item</p>
+                {% if stats.INSUMO.maior_item %}
+                    <p class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate" title="{{ stats.INSUMO.maior_item.descricao }}">{{ stats.INSUMO.maior_item.descricao }}</p>
+                    <p class="text-[10px] text-blue-600 dark:text-blue-400 font-mono mt-0.5">{{ stats.INSUMO.maior_qtd|floatformat:0 }} un</p>
+                {% else %}
+                    <p class="text-xs text-slate-400 italic">Sem estoque</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-800 rounded-xl border-t-4 border-amber-500 shadow-lg p-5 border-x border-b border-gray-100 dark:border-slate-700 transition-colors">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h2 class="text-amber-600 dark:text-amber-500 font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-bottle-droplet"></i> Vasilhame
+                    </h2>
+                    <p class="text-[9px] text-slate-400 dark:text-slate-500">Caixas / Garrafas</p>
+                </div>
+                <p class="text-2xl font-black text-slate-800 dark:text-white">{{ stats.RPM.vol|floatformat:0 }} <span class="text-[10px] font-normal text-slate-400">vol</span></p>
+            </div>
+            
+            <div class="bg-gray-50 dark:bg-slate-900/50 rounded-lg p-2 border border-gray-100 dark:border-slate-700/50">
+                <p class="text-[9px] text-slate-400 uppercase font-bold mb-1">Top Item</p>
+                {% if stats.RPM.maior_item %}
+                    <p class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate" title="{{ stats.RPM.maior_item.descricao }}">{{ stats.RPM.maior_item.descricao }}</p>
+                    <p class="text-[10px] text-amber-600 dark:text-amber-500 font-mono mt-0.5">{{ stats.RPM.maior_qtd|floatformat:0 }} un</p>
+                {% else %}
+                    <p class="text-xs text-slate-400 italic">Sem estoque</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-800 rounded-xl border-t-4 border-purple-500 shadow-lg p-5 border-x border-b border-gray-100 dark:border-slate-700 transition-colors">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h2 class="text-purple-600 dark:text-purple-500 font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-pallet"></i> Paletes
+                    </h2>
+                    <p class="text-[9px] text-slate-400 dark:text-slate-500">PBR / Chapatex</p>
+                </div>
+                <p class="text-2xl font-black text-slate-800 dark:text-white">{{ stats.PBR.vol|floatformat:1 }} <span class="text-[10px] font-normal text-slate-400">pos</span></p>
+            </div>
+            
+            <div class="bg-gray-50 dark:bg-slate-900/50 rounded-lg p-2 border border-gray-100 dark:border-slate-700/50">
+                <p class="text-[9px] text-slate-400 uppercase font-bold mb-1">Top Item</p>
+                {% if stats.PBR.maior_item %}
+                    <p class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate" title="{{ stats.PBR.maior_item.descricao }}">{{ stats.PBR.maior_item.descricao }}</p>
+                    <p class="text-[10px] text-purple-600 dark:text-purple-400 font-mono mt-0.5">{{ stats.PBR.maior_qtd|floatformat:1 }} pos</p>
+                {% else %}
+                    <p class="text-xs text-slate-400 italic">Sem estoque</p>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-2 flex flex-col md:flex-row gap-4 justify-between items-center shadow-md transition-colors">
+        
+        <div class="flex gap-2 items-center overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+            <a href="{% url 'home' %}" class="px-4 py-2 rounded text-xs font-bold transition-all border border-transparent {% if not galpao %}bg-slate-200 text-slate-900 dark:bg-slate-100 dark:text-slate-900{% else %}text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:border-gray-200 dark:hover:border-slate-600{% endif %}">
+                GLOBAL
+            </a>
+            <div class="h-4 w-px bg-gray-300 dark:bg-slate-600"></div>
+            {% for gp_num in lista_galpoes %}
+            <a href="{% url 'dashboard' gp_num %}" class="px-3 py-2 rounded text-xs font-bold transition-all border border-transparent {% if galpao == gp_num %}bg-blue-600 text-white shadow-md{% else %}text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:border-gray-200 dark:hover:border-slate-600{% endif %}">
+                GP {{ gp_num }}
+            </a>
+            {% endfor %}
+        </div>
+
+        <form method="get" class="flex gap-2 w-full md:w-auto">
+            <div class="relative flex-grow">
+                <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                <input type="text" name="produto" value="{{ filtro_produto }}" placeholder="Buscar SKU ou Nome..." 
+                       class="w-full md:w-64 bg-gray-50 dark:bg-slate-900 border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-white text-xs rounded pl-8 pr-3 py-2 focus:border-blue-500 focus:bg-white dark:focus:bg-slate-950 outline-none transition-colors">
+            </div>
+            
+            <select name="status" class="bg-gray-50 dark:bg-slate-900 border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-white text-xs rounded px-3 py-2 focus:border-blue-500 outline-none transition-colors">
                 <option value="">Status: Todos</option>
                 <option value="vazia" {% if filtro_status == 'vazia' %}selected{% endif %}>Vazias</option>
-                <option value="cheia" {% if filtro_status == 'cheia' %}selected{% endif %}>Lotadas</option>
+                <option value="cheia" {% if filtro_status == 'cheia' %}selected{% endif %}>Cheias</option>
             </select>
 
-            <button type="submit" class="bg-slate-700 hover:bg-amber-600 hover:text-white text-slate-200 px-5 py-2.5 rounded-lg transition font-medium shadow-md">
+            <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-xs font-bold transition-colors shadow-md hover:shadow-lg">
                 Filtrar
             </button>
         </form>
     </div>
 
-    <div class="flex items-end justify-between border-b border-slate-700 pb-2">
-        <h2 class="text-2xl font-bold text-white flex items-center gap-3">
-            {% if galpao == 0 %}
-                <i class="fa-solid fa-earth-americas text-amber-500"></i>
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 overflow-x-auto shadow-2xl transition-colors">
+        
+        <div class="flex gap-6 mb-4 text-[10px] uppercase font-bold text-slate-400 dark:text-slate-400 border-b border-gray-100 dark:border-slate-700 pb-2">
+            <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-slate-200 dark:bg-slate-600 border border-slate-300 dark:border-transparent"></div> Vazio</div>
+            <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-emerald-500"></div> Disponível</div>
+            <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-blue-500"></div> Ocupado (>85%)</div>
+            <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-red-600"></div> Crítico/Lotado</div>
+        </div>
+
+        <div class="min-w-[1000px]">
+            {% if not mapa %}
+                <div class="text-center py-12 text-slate-400">
+                    <p>Nenhuma rua para exibir.</p>
+                </div>
             {% else %}
-                <i class="fa-solid fa-warehouse text-blue-400"></i>
+                <div class="grid grid-cols-12 gap-1.5">
+                    {% for rua in mapa %}
+                    
+                    <div class="relative border rounded p-1.5 hover:scale-105 transition-transform cursor-pointer group h-20 flex flex-col justify-between overflow-hidden
+                         {% if 'bg-slate-900' in rua.cor_bg %} bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800
+                         {% elif 'bg-red' in rua.cor_bg %} bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/50
+                         {% elif 'bg-blue' in rua.cor_bg %} bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/50
+                         {% elif 'bg-emerald' in rua.cor_bg %} bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/50
+                         {% else %} {{ rua.cor_bg }} {% endif %}"
+                         title="{{ rua.produto }}">
+                        
+                        <div class="flex justify-between items-start z-10 relative">
+                            <span class="text-[10px] font-bold text-slate-700 dark:text-slate-300 leading-none">{{ rua.codigo }}</span>
+                            <span class="text-[9px] font-bold {{ rua.cor_texto }}">{{ rua.porcentagem }}%</span>
+                        </div>
+
+                        <div class="z-10 relative">
+                            <p class="text-[9px] text-slate-500 dark:text-slate-400 truncate w-full font-medium">{{ rua.produto }}</p>
+                        </div>
+
+                        <div class="absolute bottom-0 left-0 w-full {{ rua.cor_bar }} opacity-20" style="height: {{ rua.porcentagem }}%;"></div>
+                        <div class="absolute bottom-0 left-0 w-full h-0.5 {{ rua.cor_bar }}"></div>
+                    </div>
+                    {% endfor %}
+                </div>
             {% endif %}
-            <span class="tracking-tight">{{ titulo_galpao }}</span>
-        </h2>
-        <div class="text-xs text-slate-400">
-            Base: <span class="text-amber-400 font-mono">{{ data_ref|date:"d/m/Y" }}</span>
         </div>
     </div>
-
-    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-3 pb-8">
-        {% for rua in mapa %}
-        <div class="group relative rounded-lg border {{ rua.cor_bg }} transition-all hover:scale-105 hover:shadow-xl hover:z-10 h-28 flex flex-col justify-between overflow-hidden cursor-default bg-slate-800/50">
-            
-            <div class="p-3 relative z-10 flex flex-col h-full justify-between">
-                <div class="flex justify-between items-start">
-                    <div class="flex flex-col">
-                        <span class="text-xl font-black tracking-tighter leading-none text-white drop-shadow-md">{{ rua.codigo }}</span>
-                        {% if galpao == 0 %}
-                        <span class="text-[9px] text-slate-400 uppercase font-bold tracking-wider mt-0.5">GP {{ rua.gp }}</span>
-                        {% endif %}
-                    </div>
-                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/40 backdrop-blur-sm border border-white/10 text-slate-200">
-                        {{ rua.porcentagem }}%
-                    </span>
-                </div>
-
-                <div class="py-1 flex-grow flex items-center">
-                    <p class="text-[10px] leading-tight font-medium text-slate-300 line-clamp-2 w-full group-hover:text-white transition-colors" title="{{ rua.produto }}">
-                        {{ rua.produto }}
-                    </p>
-                </div>
-
-                <div class="flex justify-between items-end text-[10px] font-mono opacity-60 border-t border-white/5 pt-1 mt-1">
-                    <span>{{ rua.ocupacao }}</span>
-                    <span>/{{ rua.capacidade }}</span>
-                </div>
-            </div>
-
-            <div class="absolute bottom-0 left-0 w-full {{ rua.cor_bar }} opacity-15 transition-all duration-1000 group-hover:opacity-25" 
-                 style="height: {{ rua.porcentagem }}%;"></div>
-            
-            <div class="absolute bottom-0 left-0 w-full h-1 {{ rua.cor_bar }}"></div>
-        </div>
-        {% empty %}
-        <div class="col-span-full py-16 flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-700 rounded-2xl bg-slate-800/30">
-            <i class="fa-solid fa-box-open text-4xl mb-4 opacity-30 text-amber-500"></i>
-            <p class="text-lg font-medium text-slate-400">Nenhum dado encontrado</p>
-            <p class="text-sm mt-1">Verifique os filtros ou selecione outro galpão.</p>
-        </div>
-        {% endfor %}
+    
+    <div class="text-right text-[10px] text-slate-400 dark:text-slate-600">
+        WMS Lusitana v2.0 | Atualizado: {% now "H:i" %}
     </div>
 
 </div>

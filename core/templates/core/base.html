@@ -1,90 +1,178 @@
+{% load static %}
 <!DOCTYPE html>
-<html lang="pt-br">
-<head>
+<html lang="pt-br" class="dark"> <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WMS A Lusitana</title>
+    <title>WMS Lusitana</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class', // IMPORTANTE: Permite alternar manualmente
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 750: '#2d3748', 850: '#1a202c', 950: '#0d1117' }
+                    },
+                    animation: {
+                        'fade-in-down': 'fadeInDown 0.5s ease-out',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        fadeInDown: {
+                            '0%': { opacity: '0', transform: 'translateY(-10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .scrollbar-hide::-webkit-scrollbar {
-            display: none;
+    
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+        // 1. Configuração Inicial do Tema
+    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+    }
+
+    // 2. Alternar Tema (Claro/Escuro)
+    function toggleTheme(mode) {
+        if (mode === 'dark') {
+            document.documentElement.classList.add('dark');
+            localStorage.theme = 'dark';
+        } else if (mode === 'light') {
+            document.documentElement.classList.remove('dark');
+            localStorage.theme = 'light';
+        } else {
+            localStorage.removeItem('theme');
+            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
         }
-        .scrollbar-hide {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+        // Fecha o menu após escolher
+        document.getElementById('theme-dropdown').classList.add('hidden');
+    }
+
+    // 3. Abrir/Fechar o Menu (NOVO)
+    function toggleThemeMenu() {
+        const menu = document.getElementById('theme-dropdown');
+        menu.classList.toggle('hidden');
+    }
+
+    // 4. Fechar ao clicar fora (NOVO)
+    window.addEventListener('click', function(e) {
+        const btn = document.getElementById('theme-btn');
+        const menu = document.getElementById('theme-dropdown');
+        // Se o clique não foi no botão nem no menu, fecha o menu
+        if (!btn.contains(e.target) && !menu.contains(e.target)) {
+            menu.classList.add('hidden');
         }
-    </style>
+    });
+    </script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+<body class="bg-gray-100 dark:bg-[#0f172a] text-slate-800 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-300">
 
-    <nav class="bg-slate-800 border-b border-slate-700 shadow-xl sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
+    <nav class="bg-white dark:bg-[#1e293b] border-b border-gray-200 dark:border-slate-700 sticky top-0 z-50 shadow-sm transition-colors duration-300">
+        <div class="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
                 
-                <a href="{% url 'home' %}" class="flex items-center gap-3 hover:opacity-80 transition">
-                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center shadow-lg border border-amber-400/30">
-                        <i class="fa-solid fa-boxes-stacked text-white text-lg"></i>
+                <div class="flex items-center gap-3">
+                    <div class="bg-gradient-to-br from-amber-500 to-orange-600 text-white w-10 h-10 rounded-lg flex items-center justify-center shadow-lg transform hover:rotate-12 transition-transform duration-300">
+                        <i class="fa-solid fa-boxes-stacked text-xl"></i>
                     </div>
-                    <div class="leading-tight hidden md:block">
-                        <h1 class="font-black text-xl tracking-tight text-white">WMS <span class="text-amber-500">LUSITANA</span></h1>
+                    <div>
+                        <h1 class="text-xl font-black tracking-tighter text-slate-800 dark:text-white">WMS <span class="text-amber-500">LUSITANA</span></h1>
+                        <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-widest uppercase -mt-1">Gestão Inteligente v2.0</p>
                     </div>
-                </a>
+                </div>
 
-                <div class="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
+                <div class="flex items-center gap-2">
                     
-                    <a href="{% url 'upload' %}" class="flex bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm font-semibold items-center gap-2 transition border border-slate-600 whitespace-nowrap">
-                        <i class="fa-solid fa-cloud-arrow-up"></i>
-                        <span class="hidden md:inline">Importar</span>
-                    </a>
+                    <div class="relative mr-4">
+                        <button id="theme-btn" onclick="toggleThemeMenu()" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-slate-700 text-slate-600 dark:text-yellow-400 hover:bg-gray-200 dark:hover:bg-slate-600 transition flex items-center justify-center border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <i class="fa-solid fa-sun dark:hidden pointer-events-none"></i>
+                            <i class="fa-solid fa-moon hidden dark:block pointer-events-none"></i>
+                        </button>
+                        
+                        <div id="theme-dropdown" class="hidden absolute right-0 mt-2 w-36 bg-white dark:bg-slate-800 rounded-lg shadow-2xl border border-gray-200 dark:border-slate-600 overflow-hidden z-[100]">
+                            
+                            <div class="py-1">
+                                <button onclick="toggleTheme('light')" class="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-3 transition-colors">
+                                    <i class="fa-solid fa-sun text-amber-500 w-4"></i> Claro
+                                </button>
+                                
+                                <button onclick="toggleTheme('dark')" class="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-3 transition-colors">
+                                    <i class="fa-solid fa-moon text-blue-400 w-4"></i> Escuro
+                                </button>
+                                
+                                <div class="border-t border-gray-100 dark:border-slate-700"></div>
+                                
+                                <button onclick="toggleTheme('system')" class="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-3 transition-colors">
+                                    <i class="fa-solid fa-desktop text-slate-400 w-4"></i> Sistema
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
-                    <a href="{% url 'home' %}" class="flex bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition border border-emerald-400/50 whitespace-nowrap">
-                        <i class="fa-solid fa-map"></i>
-                        <span class="hidden md:inline">MAPA</span>
+                    <a href="{% url 'upload' %}" class="px-3 py-1.5 rounded-md text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition flex items-center gap-2 border border-transparent hover:border-gray-200 dark:hover:border-slate-600">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> <span class="hidden md:inline">Importar</span>
                     </a>
-
-                    <a href="{% url 'fefo' %}" class="flex bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition border border-amber-400/50 whitespace-nowrap">
-                        <i class="fa-solid fa-stopwatch"></i>
-                        <span class="hidden md:inline">FEFO</span>
+                    <a href="{% url 'home' %}" class="px-3 py-1.5 rounded-md text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition flex items-center gap-2 border border-transparent hover:border-gray-200 dark:hover:border-slate-600">
+                        <i class="fa-solid fa-map"></i> <span class="hidden md:inline">Mapa</span>
                     </a>
-
-                    <a href="{% url 'picking' %}" class="flex bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition border border-blue-400/50 whitespace-nowrap">
-                        <i class="fa-solid fa-dolly"></i>
-                        <span class="hidden md:inline">PICKING</span>
+                    <a href="{% url 'fefo' %}" class="px-3 py-1.5 rounded-md text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition flex items-center gap-2 border border-transparent hover:border-gray-200 dark:hover:border-slate-600">
+                        <i class="fa-solid fa-stopwatch"></i> <span class="hidden md:inline">FEFO</span>
                     </a>
-
-                    <a href="{% url 'consolidacao' %}" class="flex bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded-lg text-sm font-bold items-center gap-2 shadow-lg transition border border-purple-400/50 whitespace-nowrap">
-                        <i class="fa-solid fa-people-carry-box"></i>
-                        <span class="hidden md:inline">OTIMIZAR</span>
+                    <a href="{% url 'picking' %}" class="px-3 py-1.5 rounded-md text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition flex items-center gap-2 shadow-lg shadow-blue-500/30">
+                        <i class="fa-solid fa-cart-flatbed"></i> <span class="hidden md:inline">Picking</span>
                     </a>
-
+                    <a href="{% url 'consolidacao' %}" class="ml-2 px-3 py-1.5 rounded-md text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white transition flex items-center gap-2 shadow-lg shadow-purple-500/30">
+                        <i class="fa-solid fa-people-carry-box"></i> <span class="hidden md:inline">Otimizar</span>
+                    </a>
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="flex-grow container mx-auto px-2 py-6">
-        {% if messages %}
-            <div class="mb-6 max-w-4xl mx-auto space-y-2">
-                {% for message in messages %}
-                    <div class="p-4 rounded-lg shadow-lg border-l-4 flex items-center gap-3 text-white bg-slate-800 border-slate-500">
-                        <span>{{ message }}</span>
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
+    {% if messages %}
+    <div class="max-w-[1800px] mx-auto px-4 mt-4 space-y-2">
+        {% for message in messages %}
+        <div class="p-4 rounded-lg border shadow-sm animate-fade-in-down flex items-center gap-3
+            {% if message.tags == 'error' %} bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400
+            {% elif message.tags == 'success' %} bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400
+            {% elif message.tags == 'warning' %} bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400
+            {% else %} bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 {% endif %}">
+            
+            {% if message.tags == 'error' %}<i class="fa-solid fa-circle-exclamation"></i>
+            {% elif message.tags == 'success' %}<i class="fa-solid fa-circle-check"></i>
+            {% elif message.tags == 'warning' %}<i class="fa-solid fa-triangle-exclamation"></i>
+            {% else %}<i class="fa-solid fa-circle-info"></i>{% endif %}
+            
+            <span class="text-sm font-bold">{{ message }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
-        {% block content %}
-        {% endblock %}
+    <main class="flex-grow py-6 px-4 sm:px-6 lg:px-8">
+        {% block content %}{% endblock %}
     </main>
 
-    <footer class="bg-slate-950 border-t border-slate-800 py-6 mt-auto">
-        <div class="max-w-7xl mx-auto px-4 text-center">
-            <p class="text-slate-500 text-sm">WMS A Lusitana &copy; {% now "Y" %}</p>
+    <footer class="bg-white dark:bg-[#1e293b] border-t border-gray-200 dark:border-slate-700 mt-auto py-6 transition-colors duration-300">
+        <div class="max-w-[1800px] mx-auto px-4 text-center">
+            <p class="text-xs font-bold text-slate-500 dark:text-slate-400">
+                &copy; {% now "Y" %} WMS Lusitana. Todos os direitos reservados.
+            </p>
         </div>
     </footer>
+
 </body>
 </html>

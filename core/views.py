@@ -8,10 +8,10 @@ import unicodedata  # <--- O IMPORT QUE FALTAVA ESTÁ AQUI!
 from .models import LayoutArmazem, InventarioDiario, Produto, Cliente
 
 # =============================================================================
-# 1. DASHBOARD
+# 1. DASHBOARD (BASEADO NO BANCO DE DADOS - IMPORTADO VIA SCRIPT)
 # =============================================================================
 def dashboard_armazem(request, galpao_id=None):
-    # 1. Definição de Dados
+    # 1. Busca Estoque
     data_hoje = date.today()
     itens = InventarioDiario.objects.filter(data_referencia=data_hoje)
     
@@ -19,139 +19,140 @@ def dashboard_armazem(request, galpao_id=None):
         ultimo = InventarioDiario.objects.order_by('-data_referencia').first()
         if ultimo:
             itens = InventarioDiario.objects.filter(data_referencia=ultimo.data_referencia)
-            data_hoje = ultimo.data_referencia # Atualiza data visual
+            data_hoje = ultimo.data_referencia
 
-    # 2. Filtros de URL (Search e Status)
+    # 2. Filtros URL
     q_produto = request.GET.get('produto', '').strip()
     q_status = request.GET.get('status', '').strip()
+    if q_produto: itens = itens.filter(descricao__icontains=q_produto)
 
-    if q_produto:
-        itens = itens.filter(descricao__icontains=q_produto)
+    # 3. Carrega Mestre de Produtos
+    mapa_tipos = {p.sku: p.tipo for p in Produto.objects.all()}
 
-    # 3. Cálculos de Totais (PBR vs Produtos)
-    total_excel = 0
-    pbr_stats = {'PBR1': {'fracao': 0, 'posicoes': 0.0}, 'PBR2': {'fracao': 0, 'posicoes': 0.0}}
+    # 4. Inicializa Estatísticas (AGORA SÃO 4)
+    stats = {
+        'PA':     {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1, 'unidade': 'vol'},
+        'INSUMO': {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1, 'unidade': 'vol'},
+        'RPM':    {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1, 'unidade': 'vol'}, # Caixas/Garrafas
+        'PBR':    {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1, 'unidade': 'pos'}, # Paletes Vazios
+    }
     
-    # Dicionário auxiliar para montar o mapa
-    ocupacao_por_rua = {} 
-    
-    # KPIs de Maior/Menor
-    kpi_maior = None
-    kpi_menor = None
-    maior_qtd = -1
-    menor_qtd = 999999
+    transitorio = {'vol': 0.0}
+    ocupacao_por_rua = {}
+    locais_transitorio = ['TRANSITORIO', 'TRANSITÓRIO', 'BOLSAO', 'EXTERNO', 'DOCA']
 
     for item in itens:
+        sku = str(item.sku).strip()
         desc = item.descricao.upper()
+        
+        # --- A. DEFINIÇÃO DO TIPO ---
+        # 1. Tenta pelo Cadastro Oficial
+        tipo = mapa_tipos.get(sku)
+        
+        # 2. Correção de Segurança (Se o Excel estiver errado ou faltando)
+        if 'SEM GARRAFA' in desc or 'VASILHAME' in desc or 'CASCO' in desc:
+            tipo = 'RPM' # Força ser RPM se for vasilhame, mesmo que esteja PA no cadastro
+        
+        if not tipo:
+            # Fallback
+            if 'PBR' in desc or 'PALETE' in desc: tipo = 'RPM' # Inicialmente RPM, depois filtraremos PBR
+            elif 'BULK' in desc or 'LATA' in desc: tipo = 'INSUMO'
+            else: tipo = 'PA'
+
+        # --- B. SEPARAÇÃO PBR vs RPM ---
+        # Aqui é o pulo do gato: Separar o que é CAIXA do que é PALETE
+        categoria_final = tipo
+        
+        eh_palete_fisico = 'PBR' in desc or 'PALETE' in desc or 'PALLET' in desc or 'CHAPATEX' in desc
+        
+        if eh_palete_fisico:
+            categoria_final = 'PBR'
+        elif tipo == 'RPM':
+            categoria_final = 'RPM' # Mantém RPM (Caixas, Garrafas)
+        elif tipo == 'PA' and eh_palete_fisico:
+            categoria_final = 'PBR' # Corrige caso tenha sido cadastrado errado como PA
+
+        # --- C. CÁLCULO DE VOLUME ---
+        qtd_inteira = int(item.quantidade_paletes) # Parte inteira do banco
+        
+        if categoria_final == 'PBR':
+            # PBR usa POSIÇÕES (Já calculado no upload como Inteiro + Fracao/15)
+            # Como no banco salvamos a posição calculada em 'quantidade_paletes', usamos ela direto.
+            volume = item.quantidade_paletes
+        else:
+            # PA, INSUMO e RPM (Caixas) usam VOLUME FÍSICO (Inteiro + Fração Unitaria)
+            volume = qtd_inteira + item.fracao
+
+        # --- D. POPULA ESTATÍSTICAS ---
+        # Verifica se a categoria existe (segurança), senão joga em PA
+        if categoria_final not in stats: categoria_final = 'PA'
+
+        stats[categoria_final]['vol'] += volume
+        
+        if volume > stats[categoria_final]['maior_qtd']:
+            stats[categoria_final]['maior_qtd'] = volume
+            stats[categoria_final]['maior_item'] = item
+            
+        # --- E. MAPA ---
         rid = item.rua.id
-        
-        # Agrupa dados por rua para o mapa
-        if rid not in ocupacao_por_rua:
-            ocupacao_por_rua[rid] = {'qtd': 0.0, 'produtos': set()}
-        
-        ocupacao_por_rua[rid]['qtd'] += item.quantidade_paletes
+        if rid not in ocupacao_por_rua: ocupacao_por_rua[rid] = {'qtd': 0.0, 'produtos': set()}
+        ocupacao_por_rua[rid]['qtd'] += item.quantidade_paletes # Mapa sempre usa ocupação de chão
         ocupacao_por_rua[rid]['produtos'].add(item.descricao)
 
-        # Lógica PBR
-        eh_pbr = 'PBR' in desc or 'PALETE' in desc or 'CHECK' in desc
-        
-        if eh_pbr:
-            if 'PBR1' in desc or 'PBR 1' in desc:
-                pbr_stats['PBR1']['fracao'] += item.fracao
-            elif 'PBR2' in desc or 'PBR 2' in desc:
-                pbr_stats['PBR2']['fracao'] += item.fracao
-        else:
-            # Produto Normal (Soma Paletes Inteiros + Fração)
-            qtd_inteira = int(item.quantidade_paletes)
-            total_excel += (qtd_inteira + item.fracao)
+        if any(l in item.rua.rua.upper() for l in locais_transitorio):
+            transitorio['vol'] += volume
 
-            # Maior/Menor (Só produtos)
-            if item.quantidade_paletes > maior_qtd:
-                maior_qtd = item.quantidade_paletes
-                kpi_maior = item
-            if 0 < item.quantidade_paletes < menor_qtd:
-                menor_qtd = item.quantidade_paletes
-                kpi_menor = item
-
-    # Finaliza PBR
-    pbr_stats['PBR1']['posicoes'] = pbr_stats['PBR1']['fracao'] / 15.0
-    pbr_stats['PBR2']['posicoes'] = pbr_stats['PBR2']['fracao'] / 15.0
-
-    # 4. Construção do Mapa Visual (Com Cores)
+    # 5. Visualização (Mantida)
     ruas_query = LayoutArmazem.objects.all().order_by('rua')
-    
-    # Filtro de Galpão na Query
-    if galpao_id:
-        ruas_query = ruas_query.filter(gp=galpao_id)
-    
-    # Lista de Galpões para o Menu
+    if galpao_id: ruas_query = ruas_query.filter(gp=galpao_id)
     lista_galpoes = LayoutArmazem.objects.values_list('gp', flat=True).distinct().order_by('gp')
 
     mapa_visual = []
-    
     for r in ruas_query:
+        if any(l in r.rua.upper() for l in locais_transitorio): continue
+        
         dados = ocupacao_por_rua.get(r.id, {'qtd': 0.0, 'produtos': []})
         ocupado = dados['qtd']
-        
-        # Regra de 3 para porcentagem
         pct = (ocupado / r.cap_maxima * 100) if r.cap_maxima > 0 else 0
         if pct > 100: pct = 100
 
-        # Definição de Cores (O segredo do layout antigo!)
         if ocupado <= 0:
-            status = 'vazia'
-            cor_bg = 'border-slate-700 hover:border-slate-500' # Cinza
-            cor_bar = 'bg-slate-600'
+            cor_bg = 'border-slate-800 bg-slate-900/50' 
+            cor_bar = 'bg-slate-700'
+            cor_texto = 'text-slate-600'
         elif pct >= 100:
-            status = 'lotada'
-            cor_bg = 'border-rose-500/50 hover:border-rose-400 bg-rose-900/10' # Vermelho
-            cor_bar = 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]'
-        elif pct >= 80:
-            status = 'cheia'
-            cor_bg = 'border-amber-500/50 hover:border-amber-400 bg-amber-900/10' # Laranja
-            cor_bar = 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]'
+            cor_bg = 'border-red-900/50 bg-red-900/10'
+            cor_bar = 'bg-red-700'
+            cor_texto = 'text-red-400'
+        elif pct >= 85:
+            cor_bg = 'border-blue-700/50 bg-blue-900/20'
+            cor_bar = 'bg-blue-600'
+            cor_texto = 'text-blue-400'
         else:
-            status = 'disponivel'
-            cor_bg = 'border-emerald-500/50 hover:border-emerald-400 bg-emerald-900/10' # Verde
-            cor_bar = 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+            cor_bg = 'border-emerald-800/50 bg-emerald-900/10'
+            cor_bar = 'bg-emerald-600'
+            cor_texto = 'text-emerald-400'
 
-        # Filtro de Status Visual
         mostrar = True
         if q_status == 'vazia' and ocupado > 0: mostrar = False
-        if q_status == 'cheia' and pct < 80: mostrar = False
+        if q_status == 'cheia' and pct < 85: mostrar = False
 
         if mostrar:
-            prod_nome = list(dados['produtos'])[0] if dados['produtos'] else "Vazio"
-            if len(dados['produtos']) > 1: prod_nome = "MISTO / VÁRIOS"
-            
+            prod_nome = list(dados['produtos'])[0] if dados['produtos'] else "-"
+            if len(dados['produtos']) > 1: prod_nome = "MISTO"
             mapa_visual.append({
-                'id': r.id,
-                'codigo': r.rua,
-                'gp': r.gp,
-                'produto': prod_nome.title(),
-                'ocupacao': f"{ocupado:.1f}", # Formatação bonita
-                'capacidade': int(r.cap_maxima),
-                'porcentagem': int(pct),
-                'cor_bg': cor_bg,
-                'cor_bar': cor_bar
+                'id': r.id, 'codigo': r.rua, 'gp': r.gp,
+                'produto': prod_nome.title(), 'ocupacao': f"{ocupado:.1f}", 
+                'capacidade': int(r.cap_maxima), 'porcentagem': int(pct),
+                'cor_bg': cor_bg, 'cor_bar': cor_bar, 'cor_texto': cor_texto
             })
 
     return render(request, 'core/dashboard.html', {
-        'mapa': mapa_visual, # Agora é uma lista pronta!
-        'lista_galpoes': lista_galpoes,
+        'mapa': mapa_visual, 'lista_galpoes': lista_galpoes,
         'galpao': galpao_id if galpao_id else 0,
         'titulo_galpao': f"Galpão {galpao_id}" if galpao_id else "Visão Global",
-        'data_ref': data_hoje,
-        
-        # Variáveis novas
-        'total_excel': total_excel,
-        'pbr_stats': pbr_stats,
-        'top_produto': kpi_maior, # Mapeando para o nome antigo se quiser, ou usar o novo
-        'bottom_produto': kpi_menor,
-        
-        # Filtros mantidos na tela
-        'filtro_produto': q_produto,
-        'filtro_status': q_status
+        'data_ref': data_hoje, 'stats': stats, 'transitorio': transitorio,
+        'filtro_produto': q_produto, 'filtro_status': q_status
     })
 # =============================================================================
 # 2. UPLOAD DE EXCEL (VERSÃO FINAL QUE ACEITA TUDO)
@@ -643,3 +644,61 @@ def reverter_consolidacao(request):
             messages.error(request, f"Erro ao reverter: {str(e)}")
 
     return redirect('consolidacao')
+# =============================================================================
+# 8. UPLOAD DE CADASTRO DE PRODUTOS (MASTER DATA)
+# =============================================================================
+def upload_produtos(request):
+    if request.method == 'POST' and request.FILES.get('arquivo_produtos'):
+        arquivo = request.FILES['arquivo_produtos']
+        
+        try:
+            # Lê o Excel
+            df = pd.read_excel(arquivo)
+            
+            # Padroniza nomes das colunas (remove espaços e acentos)
+            def limpar_coluna(col):
+                return str(col).upper().strip()
+            
+            df.columns = [limpar_coluna(c) for c in df.columns]
+
+            # Verifica se as colunas essenciais existem (Baseado na sua imagem)
+            # SKU (A), PRODUTO (B), TIPO (E)
+            # O Pandas pode ler 'SKU', 'PRODUTO', 'TIPO' se estiver no cabeçalho
+            
+            atualizados = 0
+            criados = 0
+
+            for index, row in df.iterrows():
+                # Tratamento seguro dos dados
+                sku = str(row.get('SKU', '')).strip().replace('.0', '') # Remove decimais de excel
+                descricao = str(row.get('PRODUTO', '')).strip()
+                tipo_bruto = str(row.get('TIPO', 'PA')).upper().strip()
+                
+                if not sku or sku == 'nan': continue
+
+                # Normaliza o TIPO para bater com o sistema
+                if 'INSUMO' in tipo_bruto:
+                    tipo_final = 'INSUMO'
+                elif 'RPM' in tipo_bruto or 'ATIVO' in tipo_bruto:
+                    tipo_final = 'RPM'
+                else:
+                    tipo_final = 'PA'
+
+                # Salva ou Atualiza no Banco
+                obj, created = Produto.objects.update_or_create(
+                    sku=sku,
+                    defaults={
+                        'descricao': descricao,
+                        'tipo': tipo_final
+                    }
+                )
+                
+                if created: criados += 1
+                else: atualizados += 1
+
+            messages.success(request, f"Cadastro Atualizado! {criados} novos, {atualizados} atualizados.")
+            
+        except Exception as e:
+            messages.error(request, f"Erro ao importar produtos: {str(e)}")
+            
+    return redirect('upload')

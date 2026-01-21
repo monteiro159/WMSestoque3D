@@ -29,10 +29,18 @@ class LayoutArmazem(models.Model):
     
 class Produto(models.Model):
     # Identificação Básica
-    sku = models.CharField(max_length=20, primary_key=True, verbose_name="SKU")
-    descricao = models.CharField(max_length=200, verbose_name="Produto")
+    sku = models.CharField(max_length=50, primary_key=True, verbose_name="SKU / Código")
+    descricao = models.CharField(max_length=255, verbose_name="Produto / Descrição")
     familia = models.CharField(max_length=100, null=True, blank=True, verbose_name="Família")
     tipo = models.CharField(max_length=50, null=True, blank=True, verbose_name="Tipo") # PA, INSUMO, RPM
+    
+    # TIPO DO PRODUTO (PA, INSUMO, RPM)
+    tipo = models.CharField(
+        max_length=20, 
+        choices=[('PA', 'PA'), ('INSUMO', 'INSUMO'), ('RPM', 'RPM')],
+        default='PA',
+        verbose_name="Tipo (Categoria)"
+    )
     
     # Validade
     shelf_life_dias = models.IntegerField(default=0, verbose_name="Shelf Life (Dias)")

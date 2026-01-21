@@ -55,6 +55,7 @@ class InventarioDiario(models.Model):
     # Controle de Data e Importação
     data_referencia = models.DateField(verbose_name="Data do Inventário", db_index=True)
     data_importacao = models.DateTimeField(auto_now_add=True)
+    quantidade_paletes = models.FloatField(verbose_name="Qtd (Posições)")
     
     # Onde está? (Link com o Layout)
     # Se a rua 1001 não existir no Layout, o sistema não deixa salvar (Segurança de Dados)
@@ -68,6 +69,7 @@ class InventarioDiario(models.Model):
     # Quantidades
     quantidade_paletes = models.FloatField(verbose_name="Qtd Paletes")
     qtd_estoque_un = models.FloatField(verbose_name="Qtd Unidades", null=True, blank=True)
+    fracao = models.IntegerField(default=0, verbose_name="Fração / Unidades")
     
     # Validade e Lote
     lote = models.CharField(max_length=50, blank=True, null=True)

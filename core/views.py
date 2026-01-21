@@ -8,96 +8,151 @@ import unicodedata  # <--- O IMPORT QUE FALTAVA ESTÁ AQUI!
 from .models import LayoutArmazem, InventarioDiario, Produto, Cliente
 
 # =============================================================================
-# 1. DASHBOARD E MAPA (HOME)
+# 1. DASHBOARD
 # =============================================================================
-def dashboard_armazem(request, galpao_id=0):
-    # Filtros Básicos
-    filtro_produto = request.GET.get('produto', '').strip()
-    filtro_status = request.GET.get('status', '') 
+def dashboard_armazem(request, galpao_id=None):
+    # 1. Definição de Dados
+    data_hoje = date.today()
+    itens = InventarioDiario.objects.filter(data_referencia=data_hoje)
     
-    # Pega o último dia de inventário
-    ultimo_registro = InventarioDiario.objects.order_by('-data_referencia').first()
-    data_ref = ultimo_registro.data_referencia if ultimo_registro else date.today()
+    if not itens.exists():
+        ultimo = InventarioDiario.objects.order_by('-data_referencia').first()
+        if ultimo:
+            itens = InventarioDiario.objects.filter(data_referencia=ultimo.data_referencia)
+            data_hoje = ultimo.data_referencia # Atualiza data visual
 
-    # Base de Ruas (Layout)
-    ruas = LayoutArmazem.objects.all().order_by('gp', 'rua')
-    if galpao_id > 0:
-        ruas = ruas.filter(gp=galpao_id)
+    # 2. Filtros de URL (Search e Status)
+    q_produto = request.GET.get('produto', '').strip()
+    q_status = request.GET.get('status', '').strip()
 
-    # Base de Estoque (Apenas data mais recente)
-    estoque = InventarioDiario.objects.filter(data_referencia=data_ref)
+    if q_produto:
+        itens = itens.filter(descricao__icontains=q_produto)
+
+    # 3. Cálculos de Totais (PBR vs Produtos)
+    total_excel = 0
+    pbr_stats = {'PBR1': {'fracao': 0, 'posicoes': 0.0}, 'PBR2': {'fracao': 0, 'posicoes': 0.0}}
     
-    # Monta o Mapa Visual
-    mapa = []
+    # Dicionário auxiliar para montar o mapa
+    ocupacao_por_rua = {} 
     
-    # Totais para os Cards
-    total_geral = estoque.aggregate(Sum('quantidade_paletes'))['quantidade_paletes__sum'] or 0
+    # KPIs de Maior/Menor
+    kpi_maior = None
+    kpi_menor = None
+    maior_qtd = -1
+    menor_qtd = 999999
+
+    for item in itens:
+        desc = item.descricao.upper()
+        rid = item.rua.id
+        
+        # Agrupa dados por rua para o mapa
+        if rid not in ocupacao_por_rua:
+            ocupacao_por_rua[rid] = {'qtd': 0.0, 'produtos': set()}
+        
+        ocupacao_por_rua[rid]['qtd'] += item.quantidade_paletes
+        ocupacao_por_rua[rid]['produtos'].add(item.descricao)
+
+        # Lógica PBR
+        eh_pbr = 'PBR' in desc or 'PALETE' in desc or 'CHECK' in desc
+        
+        if eh_pbr:
+            if 'PBR1' in desc or 'PBR 1' in desc:
+                pbr_stats['PBR1']['fracao'] += item.fracao
+            elif 'PBR2' in desc or 'PBR 2' in desc:
+                pbr_stats['PBR2']['fracao'] += item.fracao
+        else:
+            # Produto Normal (Soma Paletes Inteiros + Fração)
+            qtd_inteira = int(item.quantidade_paletes)
+            total_excel += (qtd_inteira + item.fracao)
+
+            # Maior/Menor (Só produtos)
+            if item.quantidade_paletes > maior_qtd:
+                maior_qtd = item.quantidade_paletes
+                kpi_maior = item
+            if 0 < item.quantidade_paletes < menor_qtd:
+                menor_qtd = item.quantidade_paletes
+                kpi_menor = item
+
+    # Finaliza PBR
+    pbr_stats['PBR1']['posicoes'] = pbr_stats['PBR1']['fracao'] / 15.0
+    pbr_stats['PBR2']['posicoes'] = pbr_stats['PBR2']['fracao'] / 15.0
+
+    # 4. Construção do Mapa Visual (Com Cores)
+    ruas_query = LayoutArmazem.objects.all().order_by('rua')
     
-    # Top Produtos
-    top_produto = estoque.values('descricao').annotate(total=Sum('quantidade_paletes')).order_by('-total').first()
-    bottom_produto = estoque.values('descricao').annotate(total=Sum('quantidade_paletes')).order_by('total').first()
-
-    # Dicionário para acesso rápido ao estoque por Rua
-    ocupacao_dict = {}
-    for item in estoque:
-        rid = item.rua.pk
-        if rid not in ocupacao_dict:
-            ocupacao_dict[rid] = {'produto': item.descricao, 'qtd': 0}
-        
-        ocupacao_dict[rid]['qtd'] += item.quantidade_paletes
-        if ocupacao_dict[rid]['produto'] != item.descricao:
-            ocupacao_dict[rid]['produto'] = "MISTO / VÁRIOS"
-
-    # Constrói a lista final para o Template
-    for rua in ruas:
-        dados_estoque = ocupacao_dict.get(rua.pk, {'produto': '-', 'qtd': 0})
-        ocupacao_atual = dados_estoque['qtd']
-        produto_atual = dados_estoque['produto']
-        
-        # Filtros do Usuário
-        if filtro_status == 'vazia' and ocupacao_atual > 0: continue
-        if filtro_status == 'cheia' and ocupacao_atual < rua.cap_maxima: continue
-        if filtro_produto and filtro_produto.upper() not in produto_atual.upper(): continue
-
-        porcentagem = int((ocupacao_atual / rua.cap_maxima) * 100) if rua.cap_maxima > 0 else 0
-        porcentagem = min(porcentagem, 100)
-
-        # Cores Dinâmicas
-        cor_bg = "bg-slate-800 border-slate-700"
-        cor_bar = "bg-emerald-500"
-        
-        if porcentagem >= 90:
-            cor_bg = "bg-rose-900/20 border-rose-500/50"
-            cor_bar = "bg-rose-500"
-        elif porcentagem == 0:
-            cor_bg = "bg-slate-800/50 border-slate-700 opacity-75"
-        
-        mapa.append({
-            'codigo': rua.rua,
-            'gp': rua.gp,
-            'capacidade': int(rua.cap_maxima),
-            'ocupacao': int(ocupacao_atual),
-            'porcentagem': porcentagem,
-            'produto': produto_atual,
-            'cor_bg': cor_bg,
-            'cor_bar': cor_bar,
-        })
-
+    # Filtro de Galpão na Query
+    if galpao_id:
+        ruas_query = ruas_query.filter(gp=galpao_id)
+    
+    # Lista de Galpões para o Menu
     lista_galpoes = LayoutArmazem.objects.values_list('gp', flat=True).distinct().order_by('gp')
 
-    return render(request, 'core/dashboard.html', {
-        'mapa': mapa,
-        'galpao': galpao_id,
-        'lista_galpoes': lista_galpoes,
-        'total_geral': total_geral,
-        'top_produto': top_produto,
-        'bottom_produto': bottom_produto,
-        'data_ref': data_ref,
-        'filtro_produto': filtro_produto,
-        'filtro_status': filtro_status,
-        'titulo_galpao': f"Galpão {galpao_id}" if galpao_id > 0 else "Visão Global"
-    })
+    mapa_visual = []
+    
+    for r in ruas_query:
+        dados = ocupacao_por_rua.get(r.id, {'qtd': 0.0, 'produtos': []})
+        ocupado = dados['qtd']
+        
+        # Regra de 3 para porcentagem
+        pct = (ocupado / r.cap_maxima * 100) if r.cap_maxima > 0 else 0
+        if pct > 100: pct = 100
 
+        # Definição de Cores (O segredo do layout antigo!)
+        if ocupado <= 0:
+            status = 'vazia'
+            cor_bg = 'border-slate-700 hover:border-slate-500' # Cinza
+            cor_bar = 'bg-slate-600'
+        elif pct >= 100:
+            status = 'lotada'
+            cor_bg = 'border-rose-500/50 hover:border-rose-400 bg-rose-900/10' # Vermelho
+            cor_bar = 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]'
+        elif pct >= 80:
+            status = 'cheia'
+            cor_bg = 'border-amber-500/50 hover:border-amber-400 bg-amber-900/10' # Laranja
+            cor_bar = 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]'
+        else:
+            status = 'disponivel'
+            cor_bg = 'border-emerald-500/50 hover:border-emerald-400 bg-emerald-900/10' # Verde
+            cor_bar = 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+
+        # Filtro de Status Visual
+        mostrar = True
+        if q_status == 'vazia' and ocupado > 0: mostrar = False
+        if q_status == 'cheia' and pct < 80: mostrar = False
+
+        if mostrar:
+            prod_nome = list(dados['produtos'])[0] if dados['produtos'] else "Vazio"
+            if len(dados['produtos']) > 1: prod_nome = "MISTO / VÁRIOS"
+            
+            mapa_visual.append({
+                'id': r.id,
+                'codigo': r.rua,
+                'gp': r.gp,
+                'produto': prod_nome.title(),
+                'ocupacao': f"{ocupado:.1f}", # Formatação bonita
+                'capacidade': int(r.cap_maxima),
+                'porcentagem': int(pct),
+                'cor_bg': cor_bg,
+                'cor_bar': cor_bar
+            })
+
+    return render(request, 'core/dashboard.html', {
+        'mapa': mapa_visual, # Agora é uma lista pronta!
+        'lista_galpoes': lista_galpoes,
+        'galpao': galpao_id if galpao_id else 0,
+        'titulo_galpao': f"Galpão {galpao_id}" if galpao_id else "Visão Global",
+        'data_ref': data_hoje,
+        
+        # Variáveis novas
+        'total_excel': total_excel,
+        'pbr_stats': pbr_stats,
+        'top_produto': kpi_maior, # Mapeando para o nome antigo se quiser, ou usar o novo
+        'bottom_produto': kpi_menor,
+        
+        # Filtros mantidos na tela
+        'filtro_produto': q_produto,
+        'filtro_status': q_status
+    })
 # =============================================================================
 # 2. UPLOAD DE EXCEL (VERSÃO FINAL QUE ACEITA TUDO)
 # =============================================================================
@@ -108,112 +163,70 @@ def upload_inventario(request):
         try:
             df = pd.read_excel(arquivo)
             
-            # Limpeza
+            # Limpeza básica (igual anterior)
             def limpar_header(texto):
                 if isinstance(texto, str):
-                    texto_sem_acento = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8')
-                    return texto_sem_acento.lower().strip().replace(' ', '_').replace('.', '')
+                    return unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8').lower().strip().replace(' ', '_').replace('.', '')
                 return str(texto).lower().strip()
-
             df.columns = [limpar_header(c) for c in df.columns]
             
-            # Mapeamento
-            mapa_colunas = {
-                'endereco': 'rua',
-                'item': 'sku',
-                'material': 'descricao',
-                'lote_enchimento': 'lote',
-                'producao_shelf': 'producao',
-                'validade': 'validade',
-                'quantidade': 'quantidade',
-                'fracao': 'fracao',
-                'status': 'status'
-            }
-            df.rename(columns=mapa_colunas, inplace=True)
+            mapa = {'endereco': 'rua', 'item': 'sku', 'material': 'descricao', 'quantidade': 'quantidade', 'fracao': 'fracao'}
+            df.rename(columns=mapa, inplace=True)
             
-            # Validação
-            colunas_obrigatorias = ['rua', 'sku', 'descricao']
-            faltantes = [col for col in colunas_obrigatorias if col not in df.columns]
-            if faltantes:
-                messages.error(request, f"Faltando colunas: {', '.join(faltantes)}")
-                return redirect('upload')
-
-            # Processamento
-            data_hoje = date.today()
-            InventarioDiario.objects.filter(data_referencia=data_hoje).delete()
+            # Limpa dados antigos
+            InventarioDiario.objects.filter(data_referencia=date.today()).delete()
+            if 'movimentos_feitos' in request.session: del request.session['movimentos_feitos']
             
             registros = []
-            ruas_novas = []
-
+            
             for index, row in df.iterrows():
-                rua_nome = str(row['rua']).strip()
+                rua_nome = str(row.get('rua', '')).strip()
+                rua_obj, _ = LayoutArmazem.objects.get_or_create(rua=rua_nome)
                 
-                rua_obj, created = LayoutArmazem.objects.get_or_create(
-                    rua=rua_nome,
-                    defaults={
-                        'gp': 1, 'cap_maxima': 100, 'largura_colunas': 1.0, 
-                        'base_footprint': 1.0, 'cap_nivel_1': 0, 'cap_nivel_2': 0
-                    }
-                )
-                if created: ruas_novas.append(rua_nome)
+                sku = str(row.get('sku', '')).strip()
+                desc = str(row.get('descricao', '')).upper()
                 
-                validade = row.get('validade')
-                if pd.isnull(validade) or str(validade).strip() == '': validade = None
-                producao = row.get('producao')
-                if pd.isnull(producao) or str(producao).strip() == '': producao = None
-
-                # === NOVA LÓGICA DECIMAL (0 + 3 = 0.3) ===
+                # 1. Trata Quantidade (Inteira)
+                try: qtd_int = int(float(row.get('quantidade', 0)))
+                except: qtd_int = 0
                 
-                # 1. Trata a Quantidade (Inteiro)
-                try:
-                    q_val = row.get('quantidade')
-                    qtd_int = int(float(q_val)) if pd.notnull(q_val) and str(q_val).strip() != '' else 0
-                except:
-                    qtd_int = 0
-
-                # 2. Trata a Fração (Decimal)
-                try:
-                    f_val = row.get('fracao')
-                    fracao_int = int(float(f_val)) if pd.notnull(f_val) and str(f_val).strip() != '' else 0
-                except:
-                    fracao_int = 0
+                # 2. Trata Fração (Inteira)
+                try: fracao_int = int(float(row.get('fracao', 0)))
+                except: fracao_int = 0
                 
-                # 3. Junta os dois visualmente (Ex: 10 e 3 vira 10.3)
-                # Se a fração for 0, fica apenas o inteiro (Ex: 10.0)
-                # Se a fração for 3, e qtd 0, fica 0.3
-                try:
-                    str_valor_final = f"{qtd_int}.{fracao_int}"
-                    qtd_final = float(str_valor_final)
-                except:
-                    qtd_final = 0.0
+                # === LÓGICA DO PBR (DIVISÃO POR 15) ===
+                # Se for PBR, calculamos ocupação real. Se for cerveja, usamos visual decimal.
+                eh_pbr = 'PBR' in desc or 'PALETE' in desc or 'CHECK' in desc
+                
+                if eh_pbr:
+                    # Regra: 15 frações = 1 posição
+                    # Ocupação = Inteiros + (Fração / 15)
+                    ocupacao_posicoes = qtd_int + (fracao_int / 15.0)
+                else:
+                    # Regra Visual Decimal (Amstel): 0 e 3 vira 0.3
+                    try:
+                        ocupacao_posicoes = float(f"{qtd_int}.{fracao_int}")
+                    except:
+                        ocupacao_posicoes = 0.0
 
                 registros.append(InventarioDiario(
-                    data_referencia=data_hoje,
+                    data_referencia=date.today(),
                     rua=rua_obj,
-                    sku=str(row['sku']),
-                    descricao=row['descricao'],
-                    quantidade_paletes=qtd_final, # Agora vai salvo como 0.3
-                    data_validade=validade,
-                    data_producao=producao,
-                    lote=str(row.get('lote', '')),
+                    sku=sku,
+                    descricao=row.get('descricao', ''),
+                    # Aqui salvamos a OCUPAÇÃO para o Mapa pintar certo
+                    quantidade_paletes=ocupacao_posicoes,
+                    # Aqui salvamos a FRAÇÃO REAL para o relatório
+                    fracao=fracao_int, 
+                    
+                    data_validade=row.get('validade') if pd.notnull(row.get('validade')) else None,
+                    lote=str(row.get('lote_enchimento', '')),
                     status=str(row.get('status', 'DISPONIVEL'))
                 ))
             
             InventarioDiario.objects.bulk_create(registros)
             
-            for reg in registros:
-                Produto.objects.get_or_create(
-                    sku=reg.sku,
-                    defaults={'descricao': reg.descricao}
-                )
-
-            if ruas_novas:
-                qtd_novas = len(ruas_novas)
-                exemplo = ", ".join(ruas_novas[:3])
-                messages.warning(request, f"⚠️ Atenção: {qtd_novas} novas ruas criadas ({exemplo}).")
-            else:
-                messages.success(request, f"Sucesso! {len(registros)} itens importados.")
-                
+            messages.success(request, f"Sucesso! {len(registros)} itens importados.")
             return redirect('home')
 
         except Exception as e:

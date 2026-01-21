@@ -1,48 +1,79 @@
 {% extends 'core/base.html' %}
 
 {% block content %}
-<div class="max-w-[1600px] mx-auto space-y-6">
+<div class="max-w-[1600px] mx-auto space-y-6 animate-fade-in-down">
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-slate-600 transition">
-            <div class="w-12 h-12 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center text-xl border border-blue-500/20">
-                <i class="fa-solid fa-box-open"></i>
+        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-blue-500 transition relative overflow-hidden group">
+            <div class="absolute right-0 top-0 bottom-0 w-1 bg-blue-500"></div>
+            <div class="w-12 h-12 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center text-xl border border-blue-500/20 group-hover:scale-110 transition">
+                <i class="fa-solid fa-boxes-stacked"></i>
             </div>
             <div>
-                <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Total Armazenado</p>
-                <p class="text-2xl font-bold text-white">{{ total_geral }} <span class="text-sm font-normal text-slate-500">pal</span></p>
+                <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Produtos (Vol. Total)</p>
+                <p class="text-3xl font-black text-white">{{ total_excel }} <span class="text-sm font-normal text-slate-500">vol</span></p>
+                <p class="text-[9px] text-slate-500">Soma s/ PBR</p>
             </div>
         </div>
 
-        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-slate-600 transition">
+        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-purple-500 transition relative overflow-hidden group">
+            <div class="absolute right-0 top-0 bottom-0 w-1 bg-purple-500"></div>
+            <div class="w-12 h-12 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center text-xl border border-purple-500/20 group-hover:scale-110 transition">
+                <i class="fa-solid fa-pallet"></i>
+            </div>
+            <div class="w-full">
+                <div class="flex justify-between items-end">
+                    <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">PBR 1</p>
+                    <p class="text-[9px] text-purple-300">{{ pbr_stats.PBR1.fracao }} un</p>
+                </div>
+                <p class="text-2xl font-black text-white">{{ pbr_stats.PBR1.posicoes|floatformat:1 }} <span class="text-sm font-normal text-slate-500">pos</span></p>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-pink-500 transition relative overflow-hidden group">
+            <div class="absolute right-0 top-0 bottom-0 w-1 bg-pink-500"></div>
+            <div class="w-12 h-12 rounded-full bg-pink-500/10 text-pink-400 flex items-center justify-center text-xl border border-pink-500/20 group-hover:scale-110 transition">
+                <i class="fa-solid fa-pallet"></i>
+            </div>
+            <div class="w-full">
+                <div class="flex justify-between items-end">
+                    <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">PBR 2</p>
+                    <p class="text-[9px] text-pink-300">{{ pbr_stats.PBR2.fracao }} un</p>
+                </div>
+                <p class="text-2xl font-black text-white">{{ pbr_stats.PBR2.posicoes|floatformat:1 }} <span class="text-sm font-normal text-slate-500">pos</span></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-emerald-500 transition">
             <div class="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xl border border-emerald-500/20">
                 <i class="fa-solid fa-arrow-trend-up"></i>
             </div>
             <div class="overflow-hidden">
                 <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Maior Estoque</p>
-                <p class="text-lg font-bold text-white truncate" title="{{ top_produto.descricao }}">
+                <p class="text-sm font-bold text-white truncate" title="{{ top_produto.descricao }}">
                     {{ top_produto.descricao|default:"-" }}
                 </p>
-                <p class="text-xs text-emerald-400 font-mono">{{ top_produto.total }} paletes</p>
+                <p class="text-xs text-emerald-400 font-mono">{{ top_produto.quantidade_paletes|floatformat:1 }} paletes</p>
             </div>
         </div>
 
-        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-slate-600 transition">
+        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex items-center gap-4 hover:border-rose-500 transition">
             <div class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center text-xl border border-rose-500/20">
                 <i class="fa-solid fa-arrow-trend-down"></i>
             </div>
             <div class="overflow-hidden">
                 <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Menor Estoque</p>
-                <p class="text-lg font-bold text-white truncate" title="{{ bottom_produto.descricao }}">
+                <p class="text-sm font-bold text-white truncate" title="{{ bottom_produto.descricao }}">
                     {{ bottom_produto.descricao|default:"-" }}
                 </p>
-                <p class="text-xs text-rose-400 font-mono">{{ bottom_produto.total }} paletes</p>
+                <p class="text-xs text-rose-400 font-mono">{{ bottom_produto.quantidade_paletes|floatformat:1 }} paletes</p>
             </div>
         </div>
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        
         <a href="{% url 'picking' %}" class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg hover:bg-slate-700 hover:border-blue-500 transition group flex flex-col items-center justify-center gap-2 text-center h-full">
             <div class="w-12 h-12 rounded-full bg-blue-900/50 text-blue-400 flex items-center justify-center text-xl group-hover:scale-110 transition shadow-inner">
                 <i class="fa-solid fa-dolly"></i>
@@ -88,7 +119,7 @@
         
         <div class="w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
             <div class="flex gap-2">
-                <a href="{% url 'dashboard' 0 %}" 
+                <a href="{% url 'home' %}" 
                    class="px-5 py-2.5 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2
                    {% if galpao == 0 %}bg-amber-600 text-white shadow-lg shadow-amber-900/50{% else %}bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-white{% endif %}">
                     <i class="fa-solid fa-globe"></i> GLOBAL

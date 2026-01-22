@@ -159,7 +159,7 @@ def dashboard_armazem(request, galpao_id=None):
         'filtro_produto': q_produto, 'filtro_status': q_status
     })
 # =============================================================================
-# 2. UPLOAD DE EXCEL (VERSÃO FINAL QUE ACEITA TUDO)
+# 2. UPLOAD DE EXCEL
 # =============================================================================
 def upload_inventario(request):
     if request.method == 'POST' and request.FILES.get('arquivo'):
@@ -191,7 +191,7 @@ def upload_inventario(request):
             }
             df.rename(columns=mapa_colunas, inplace=True)
             
-            # Limpeza Geral
+            # Limpeza Geral do Banco
             data_hoje = date.today()
             InventarioDiario.objects.filter(data_referencia=data_hoje).delete()
             
@@ -201,26 +201,51 @@ def upload_inventario(request):
             registros = []
             ruas_novas = []
 
+            # AQUI ESTÁ O LOOP QUE PERCORRE AS LINHAS
             for index, row in df.iterrows():
-                rua_nome = str(row['rua']).strip()
                 
-                # --- CORREÇÃO AQUI ---
-                # Removi 'tipo_palete' e 'empilhamento_max' pois não existem no LayoutArmazem
-                # Mantive 'largura_colunas' pois é obrigatório
+                # --- 1. TRATAMENTO DO NOME DA RUA (PREVENIR DUPLICIDADE) ---
+                raw_rua = row['rua']
+                rua_nome = str(raw_rua).strip()
+                
+                # Remove o ".0" se o Excel mandou como decimal (Ex: "7008.0" vira "7008")
+                if rua_nome.endswith('.0'):
+                    rua_nome = rua_nome[:-2]
+                
+                # Se for vazia, pula a linha
+                if not rua_nome or rua_nome == 'nan':
+                    continue
+
+                # --- 2. CÁLCULO AUTOMÁTICO DO GALPÃO ---
+                gp_sugerido = 1 # Padrão
+                if len(rua_nome) > 0 and rua_nome[0].isdigit():
+                    try:
+                        # Se tiver 5 dígitos (ex: 12001), pega os dois primeiros -> GP 12
+                        if len(rua_nome) >= 5 and rua_nome[:2].isdigit():
+                            gp_sugerido = int(rua_nome[:2])
+                        else:
+                            # Se tiver 4 ou menos (ex: 7001), pega o primeiro -> GP 7
+                            gp_sugerido = int(rua_nome[0])
+                        
+                        if gp_sugerido == 0: gp_sugerido = 1
+                    except:
+                        gp_sugerido = 1
+
+                # --- 3. CRIAÇÃO OU BUSCA DA RUA ---
                 rua_obj, created = LayoutArmazem.objects.get_or_create(
                     rua=rua_nome,
                     defaults={
-                        'gp': 1,               
+                        'gp': gp_sugerido,       # <--- USA O GALPÃO CALCULADO
                         'cap_maxima': 100,     
-                        'largura_colunas': 1.0, # Essencial para evitar o erro NOT NULL
+                        'largura_colunas': 1.0,  # Obrigatório
                         'base_footprint': 1.0,
                         'cap_nivel_1': 0,
                         'cap_nivel_2': 0
                     }
                 )
-                if created: ruas_novas.append(rua_nome)
+                if created: ruas_novas.append(f"{rua_nome} (GP {gp_sugerido})")
                 
-                # Tratamento de Validade e Produção
+                # --- 4. TRATAMENTO DOS DADOS DO ITEM ---
                 validade = row.get('validade')
                 if pd.isnull(validade) or str(validade).strip() == '': validade = None
                 
@@ -236,9 +261,6 @@ def upload_inventario(request):
                 
                 # Lógica PBR vs Visual Decimal
                 desc = str(row.get('descricao', '')).upper()
-                
-                # Nova regra: Se for PBR (Palete), divide fração por 15
-                # Se for RPM/PA/INSUMO, usa decimal visual
                 eh_pbr_fisico = 'PBR' in desc or 'PALETE' in desc
                 
                 if eh_pbr_fisico:
@@ -262,20 +284,21 @@ def upload_inventario(request):
             
             InventarioDiario.objects.bulk_create(registros)
             
-            # Cria produtos que não existem
+            # Cria produtos que não existem no cadastro
             for reg in registros:
                 Produto.objects.get_or_create(sku=reg.sku, defaults={'descricao': reg.descricao})
 
             if ruas_novas:
                 qtd_novas = len(ruas_novas)
-                messages.warning(request, f"⚠️ Atenção: {qtd_novas} novas ruas criadas (ex: {ruas_novas[0]}).")
+                # Mostra aviso de ruas novas
+                messages.warning(request, f"⚠️ {qtd_novas} novas ruas detectadas e criadas (ex: {ruas_novas[0]}).")
             else:
-                messages.success(request, f"Sucesso! {len(registros)} itens importados.")
+                messages.success(request, f"Sucesso! {len(registros)} itens importados e estoque atualizado.")
                 
             return redirect('home')
 
         except Exception as e:
-            messages.error(request, f"Erro: {str(e)}")
+            messages.error(request, f"Erro no processamento: {str(e)}")
             return redirect('upload')
 
     return render(request, 'core/upload.html')
@@ -431,10 +454,7 @@ def picking_busca(request):
         'cliente_selecionado': cliente_selecionado
     })
 # =============================================================================
-# 5. OTIMIZAÇÃO
-# =============================================================================
-# =============================================================================
-# 4. OTIMIZAÇÃO E CONSOLIDAÇÃO (LÓGICA CENTRALIZADA E CORRIGIDA)
+# 5. OTIMIZAÇÃO E CONSOLIDAÇÃO (LÓGICA CENTRALIZADA E CORRIGIDA)
 # =============================================================================
 
 def _calcular_otimizacao():

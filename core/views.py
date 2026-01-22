@@ -26,15 +26,15 @@ def dashboard_armazem(request, galpao_id=None):
     q_status = request.GET.get('status', '').strip()
     if q_produto: itens = itens.filter(descricao__icontains=q_produto)
 
-    # 3. Carrega Mestre de Produtos
+    # 3. Carrega Mestre
     mapa_tipos = {p.sku: p.tipo for p in Produto.objects.all()}
 
-    # 4. Inicializa Estatísticas (AGORA SÃO 4)
+    # 4. Inicializa Estatísticas
     stats = {
-        'PA':     {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1, 'unidade': 'vol'},
-        'INSUMO': {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1, 'unidade': 'vol'},
-        'RPM':    {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1, 'unidade': 'vol'}, # Caixas/Garrafas
-        'PBR':    {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1, 'unidade': 'pos'}, # Paletes Vazios
+        'PA':     {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1},
+        'INSUMO': {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1},
+        'RPM':    {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1}, # Caixas/Garrafas
+        'PBR':    {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1}, # Paletes Físicos
     }
     
     transitorio = {'vol': 0.0}
@@ -45,64 +45,68 @@ def dashboard_armazem(request, galpao_id=None):
         sku = str(item.sku).strip()
         desc = item.descricao.upper()
         
-        # --- A. DEFINIÇÃO DO TIPO ---
-        # 1. Tenta pelo Cadastro Oficial
+        # A. DEFINIÇÃO DA CATEGORIA BASE (PA, INSUMO, RPM)
         tipo = mapa_tipos.get(sku)
         
-        # 2. Correção de Segurança (Se o Excel estiver errado ou faltando)
+        # Correções de Segurança (Dados sujos no nome)
         if 'SEM GARRAFA' in desc or 'VASILHAME' in desc or 'CASCO' in desc:
-            tipo = 'RPM' # Força ser RPM se for vasilhame, mesmo que esteja PA no cadastro
+            tipo = 'RPM'
         
         if not tipo:
-            # Fallback
-            if 'PBR' in desc or 'PALETE' in desc: tipo = 'RPM' # Inicialmente RPM, depois filtraremos PBR
+            # Fallback se não tiver no cadastro
+            if desc.startswith('PLT') or 'CHAPATEX' in desc: tipo = 'RPM'
             elif 'BULK' in desc or 'LATA' in desc: tipo = 'INSUMO'
             else: tipo = 'PA'
 
-        # --- B. SEPARAÇÃO PBR vs RPM ---
-        # Aqui é o pulo do gato: Separar o que é CAIXA do que é PALETE
+        # B. SEPARAÇÃO FINA: RPM (Caixa) vs PBR (Palete)
+        # O problema do Heineken "unpbr" acontecia aqui. Vamos ser restritos.
+        
         categoria_final = tipo
         
-        eh_palete_fisico = 'PBR' in desc or 'PALETE' in desc or 'PALLET' in desc or 'CHAPATEX' in desc
+        # Lista estrita de coisas que são ESTRUTURA (Card Roxo)
+        eh_estrutura = False
+        if 'PLT PBR' in desc or 'PALETE PBR' in desc or 'CHAPATEX' in desc or desc.startswith('PBR'):
+            eh_estrutura = True
         
-        if eh_palete_fisico:
+        # Lógica de Decisão
+        if eh_estrutura:
             categoria_final = 'PBR'
         elif tipo == 'RPM':
-            categoria_final = 'RPM' # Mantém RPM (Caixas, Garrafas)
-        elif tipo == 'PA' and eh_palete_fisico:
-            categoria_final = 'PBR' # Corrige caso tenha sido cadastrado errado como PA
-
-        # --- C. CÁLCULO DE VOLUME ---
-        qtd_inteira = int(item.quantidade_paletes) # Parte inteira do banco
-        
-        if categoria_final == 'PBR':
-            # PBR usa POSIÇÕES (Já calculado no upload como Inteiro + Fracao/15)
-            # Como no banco salvamos a posição calculada em 'quantidade_paletes', usamos ela direto.
-            volume = item.quantidade_paletes
-        else:
-            # PA, INSUMO e RPM (Caixas) usam VOLUME FÍSICO (Inteiro + Fração Unitaria)
-            volume = qtd_inteira + item.fracao
-
-        # --- D. POPULA ESTATÍSTICAS ---
-        # Verifica se a categoria existe (segurança), senão joga em PA
+            # Se é RPM mas não é estrutura (ex: caixa plástica, garrafa solta) -> Vai para Card RPM
+            categoria_final = 'RPM'
+        elif tipo == 'PA':
+            # Se é PA, garante que fica em PA (não deixa cair em PBR por engano de string)
+            categoria_final = 'PA'
+            
+        # Garante que a chave existe
         if categoria_final not in stats: categoria_final = 'PA'
 
-        stats[categoria_final]['vol'] += volume
+        # C. CÁLCULO DE VOLUME
+        qtd_inteira = int(item.quantidade_paletes)
         
+        if categoria_final == 'PBR':
+            # Paletes contam por Posição
+            volume = item.quantidade_paletes
+        else:
+            # PA, INSUMO e RPM (Caixas) contam por Unidade de Venda
+            volume = qtd_inteira + item.fracao
+
+        # D. POPULA ESTATÍSTICAS
+        stats[categoria_final]['vol'] += volume
         if volume > stats[categoria_final]['maior_qtd']:
             stats[categoria_final]['maior_qtd'] = volume
             stats[categoria_final]['maior_item'] = item
             
-        # --- E. MAPA ---
+        # E. MAPA
         rid = item.rua.id
         if rid not in ocupacao_por_rua: ocupacao_por_rua[rid] = {'qtd': 0.0, 'produtos': set()}
-        ocupacao_por_rua[rid]['qtd'] += item.quantidade_paletes # Mapa sempre usa ocupação de chão
+        ocupacao_por_rua[rid]['qtd'] += item.quantidade_paletes
         ocupacao_por_rua[rid]['produtos'].add(item.descricao)
 
         if any(l in item.rua.rua.upper() for l in locais_transitorio):
             transitorio['vol'] += volume
 
-    # 5. Visualização (Mantida)
+    # 5. Visualização
     ruas_query = LayoutArmazem.objects.all().order_by('rua')
     if galpao_id: ruas_query = ruas_query.filter(gp=galpao_id)
     lista_galpoes = LayoutArmazem.objects.values_list('gp', flat=True).distinct().order_by('gp')
@@ -164,70 +168,110 @@ def upload_inventario(request):
         try:
             df = pd.read_excel(arquivo)
             
-            # Limpeza básica (igual anterior)
+            # Limpeza de Cabeçalho
             def limpar_header(texto):
                 if isinstance(texto, str):
-                    return unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8').lower().strip().replace(' ', '_').replace('.', '')
+                    texto_sem_acento = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8')
+                    return texto_sem_acento.lower().strip().replace(' ', '_').replace('.', '')
                 return str(texto).lower().strip()
+
             df.columns = [limpar_header(c) for c in df.columns]
             
-            mapa = {'endereco': 'rua', 'item': 'sku', 'material': 'descricao', 'quantidade': 'quantidade', 'fracao': 'fracao'}
-            df.rename(columns=mapa, inplace=True)
+            # Mapeamento
+            mapa_colunas = {
+                'endereco': 'rua',
+                'item': 'sku',
+                'material': 'descricao',
+                'lote_enchimento': 'lote',
+                'producao_shelf': 'producao',
+                'validade': 'validade',
+                'quantidade': 'quantidade',
+                'fracao': 'fracao',
+                'status': 'status'
+            }
+            df.rename(columns=mapa_colunas, inplace=True)
             
-            # Limpa dados antigos
-            InventarioDiario.objects.filter(data_referencia=date.today()).delete()
-            if 'movimentos_feitos' in request.session: del request.session['movimentos_feitos']
+            # Limpeza Geral
+            data_hoje = date.today()
+            InventarioDiario.objects.filter(data_referencia=data_hoje).delete()
+            
+            if 'movimentos_feitos' in request.session:
+                del request.session['movimentos_feitos']
             
             registros = []
-            
+            ruas_novas = []
+
             for index, row in df.iterrows():
-                rua_nome = str(row.get('rua', '')).strip()
-                rua_obj, _ = LayoutArmazem.objects.get_or_create(rua=rua_nome)
+                rua_nome = str(row['rua']).strip()
                 
-                sku = str(row.get('sku', '')).strip()
-                desc = str(row.get('descricao', '')).upper()
+                # --- CORREÇÃO AQUI ---
+                # Removi 'tipo_palete' e 'empilhamento_max' pois não existem no LayoutArmazem
+                # Mantive 'largura_colunas' pois é obrigatório
+                rua_obj, created = LayoutArmazem.objects.get_or_create(
+                    rua=rua_nome,
+                    defaults={
+                        'gp': 1,               
+                        'cap_maxima': 100,     
+                        'largura_colunas': 1.0, # Essencial para evitar o erro NOT NULL
+                        'base_footprint': 1.0,
+                        'cap_nivel_1': 0,
+                        'cap_nivel_2': 0
+                    }
+                )
+                if created: ruas_novas.append(rua_nome)
                 
-                # 1. Trata Quantidade (Inteira)
+                # Tratamento de Validade e Produção
+                validade = row.get('validade')
+                if pd.isnull(validade) or str(validade).strip() == '': validade = None
+                
+                producao = row.get('producao')
+                if pd.isnull(producao) or str(producao).strip() == '': producao = None
+
+                # Lógica Decimal
                 try: qtd_int = int(float(row.get('quantidade', 0)))
                 except: qtd_int = 0
-                
-                # 2. Trata Fração (Inteira)
+
                 try: fracao_int = int(float(row.get('fracao', 0)))
                 except: fracao_int = 0
                 
-                # === LÓGICA DO PBR (DIVISÃO POR 15) ===
-                # Se for PBR, calculamos ocupação real. Se for cerveja, usamos visual decimal.
-                eh_pbr = 'PBR' in desc or 'PALETE' in desc or 'CHECK' in desc
+                # Lógica PBR vs Visual Decimal
+                desc = str(row.get('descricao', '')).upper()
                 
-                if eh_pbr:
-                    # Regra: 15 frações = 1 posição
-                    # Ocupação = Inteiros + (Fração / 15)
+                # Nova regra: Se for PBR (Palete), divide fração por 15
+                # Se for RPM/PA/INSUMO, usa decimal visual
+                eh_pbr_fisico = 'PBR' in desc or 'PALETE' in desc
+                
+                if eh_pbr_fisico:
                     ocupacao_posicoes = qtd_int + (fracao_int / 15.0)
                 else:
-                    # Regra Visual Decimal (Amstel): 0 e 3 vira 0.3
-                    try:
-                        ocupacao_posicoes = float(f"{qtd_int}.{fracao_int}")
-                    except:
-                        ocupacao_posicoes = 0.0
+                    try: ocupacao_posicoes = float(f"{qtd_int}.{fracao_int}")
+                    except: ocupacao_posicoes = 0.0
 
                 registros.append(InventarioDiario(
-                    data_referencia=date.today(),
+                    data_referencia=data_hoje,
                     rua=rua_obj,
-                    sku=sku,
+                    sku=str(row.get('sku', '')),
                     descricao=row.get('descricao', ''),
-                    # Aqui salvamos a OCUPAÇÃO para o Mapa pintar certo
                     quantidade_paletes=ocupacao_posicoes,
-                    # Aqui salvamos a FRAÇÃO REAL para o relatório
-                    fracao=fracao_int, 
-                    
-                    data_validade=row.get('validade') if pd.notnull(row.get('validade')) else None,
-                    lote=str(row.get('lote_enchimento', '')),
+                    fracao=fracao_int,
+                    data_validade=validade,
+                    data_producao=producao,
+                    lote=str(row.get('lote', '')),
                     status=str(row.get('status', 'DISPONIVEL'))
                 ))
             
             InventarioDiario.objects.bulk_create(registros)
             
-            messages.success(request, f"Sucesso! {len(registros)} itens importados.")
+            # Cria produtos que não existem
+            for reg in registros:
+                Produto.objects.get_or_create(sku=reg.sku, defaults={'descricao': reg.descricao})
+
+            if ruas_novas:
+                qtd_novas = len(ruas_novas)
+                messages.warning(request, f"⚠️ Atenção: {qtd_novas} novas ruas criadas (ex: {ruas_novas[0]}).")
+            else:
+                messages.success(request, f"Sucesso! {len(registros)} itens importados.")
+                
             return redirect('home')
 
         except Exception as e:
@@ -391,18 +435,27 @@ def picking_busca(request):
 # 5. OTIMIZAÇÃO
 # =============================================================================
 def sugestao_consolidacao(request):
+    # 1. Validações Iniciais
     ultimo_registro = InventarioDiario.objects.order_by('-data_referencia').first()
     if not ultimo_registro:
-        return render(request, 'core/consolidacao.html', {'sugestoes': [], 'qtd_oportunidades': 0, 'ganho_ruas': 0, 'pct_otimizacao': 0})
+        return render(request, 'core/consolidacao.html', {
+            'sugestoes': [], 'qtd_oportunidades': 0, 'ganho_ruas': 0, 'pct_otimizacao': 0
+        })
         
     data_ref = ultimo_registro.data_referencia
     estoque = InventarioDiario.objects.filter(data_referencia=data_ref).select_related('rua')
     
+    # 2. Mapa de Ocupação Atual (Ocupação Física no Chão)
     mapa_ocupacao = {}
     for item in estoque:
         rid = item.rua.pk
         mapa_ocupacao[rid] = mapa_ocupacao.get(rid, 0) + item.quantidade_paletes
 
+    # 3. Carrega Dados de Empilhamento dos Produtos (Para evitar N+1 queries)
+    # Cria um dicionário: {'SKU123': 3, 'SKU456': 2}
+    mapa_empilhamento = {p.sku: p.empilhamento for p in Produto.objects.all()}
+
+    # 4. Agrupamento por SKU + Validade
     grupos = {}
     for item in estoque:
         data_val = item.data_validade.strftime('%Y-%m-%d') if item.data_validade else 'ND'
@@ -413,9 +466,11 @@ def sugestao_consolidacao(request):
     sugestoes = []
     ruas_envolvidas = set()
 
+    # 5. Algoritmo de Consolidação
     for chave, itens_brutos in grupos.items():
         if len(itens_brutos) < 2: continue
 
+        # Agrupa itens que já estão na mesma rua (para somar qtd)
         itens_por_rua = {}
         for item in itens_brutos:
             nome_rua = str(item.rua.rua).strip()
@@ -427,6 +482,11 @@ def sugestao_consolidacao(request):
         itens = list(itens_por_rua.values())
         sku, data_val = chave.split('|')
         descricao_produto = itens[0].descricao
+        
+        # Pega o empilhamento do produto (Padrão 1 se não achar)
+        stacking = mapa_empilhamento.get(sku, 1)
+
+        # Ordena: Tenta esvaziar quem tem menos primeiro
         itens.sort(key=lambda x: x.quantidade_paletes)
 
         for i in range(len(itens)):
@@ -439,13 +499,26 @@ def sugestao_consolidacao(request):
                 
                 destino = itens[j]
                 if destino.rua.pk in ruas_envolvidas: continue
-                
                 if str(origem.rua.rua).strip() == str(destino.rua.rua).strip(): continue
 
-                ocupacao_destino = mapa_ocupacao.get(destino.rua.pk, 0)
-                cap_max = destino.rua.cap_maxima
-                espaco_livre = cap_max - ocupacao_destino
+                # === CÁLCULO DA CAPACIDADE DINÂMICA ===
+                rua_obj = destino.rua
                 
+                # Base da rua (Footprint)
+                base = rua_obj.base_footprint
+                
+                # Lógica de Segurança:
+                # Se a base for <= 1 (configuração antiga/inválida), usamos a cap_maxima fixa como fallback.
+                # Se a base estiver certa (ex: 42), multiplicamos pelo empilhamento do produto.
+                if base > 1:
+                    cap_real = base * stacking
+                else:
+                    cap_real = rua_obj.cap_maxima
+
+                ocupacao_destino = mapa_ocupacao.get(destino.rua.pk, 0)
+                espaco_livre = cap_real - ocupacao_destino
+                
+                # Verifica se cabe (com margem de segurança de 0.1 para flutuação)
                 if espaco_livre >= (origem.quantidade_paletes - 0.1):
                     destino_antes = int(ocupacao_destino)
                     destino_depois = int(ocupacao_destino + origem.quantidade_paletes)
@@ -454,25 +527,30 @@ def sugestao_consolidacao(request):
                         'produto': descricao_produto,
                         'sku': sku,
                         'validade': data_val,
-                        'qtd_mover': int(origem.quantidade_paletes),
+                        'qtd_mover': float(origem.quantidade_paletes), # Garante float
                         'origem_rua': origem.rua.rua,
                         'origem_gp': origem.rua.gp,
                         'destino_rua': destino.rua.rua,
                         'destino_gp': destino.rua.gp,
                         'origem_rua_id': origem.rua.pk,
                         'destino_rua_id': destino.rua.pk,
-                        'destino_cap': int(cap_max),
+                        'destino_cap': int(cap_real), # Mostra a capacidade REAL para este produto
                         'destino_antes': destino_antes,
                         'destino_depois': destino_depois,
-                        'ganho': f"Esvazia Rua {origem.rua.rua}"
+                        'ganho': f"Esvazia Rua {origem.rua.rua}",
+                        'motivo': f"Stack: {stacking}x" # Info extra visual
                     })
                     
+                    # Atualiza simulação de ocupação
                     mapa_ocupacao[destino.rua.pk] += origem.quantidade_paletes 
                     mapa_ocupacao[origem.rua.pk] -= origem.quantidade_paletes 
+                    
+                    # Marca ruas como usadas nesta rodada para evitar conflito
                     ruas_envolvidas.add(origem.rua.pk)
                     ruas_envolvidas.add(destino.rua.pk)
                     break 
 
+    # 6. Finalização e Contexto
     qtd_sugestoes = len(sugestoes)
     total_ruas_ocupadas = estoque.values('rua').distinct().count()
     pct_otimizacao = 0
@@ -489,7 +567,6 @@ def sugestao_consolidacao(request):
         'total_ocupadas': total_ruas_ocupadas,
         'movimentos_feitos': movimentos_feitos
     })
-
 # =============================================================================
 # 6. AÇÃO: REALIZAR MOVIMENTAÇÃO
 # =============================================================================

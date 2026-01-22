@@ -42,6 +42,11 @@ class Produto(models.Model):
         verbose_name="Tipo (Categoria)"
     )
     
+    empilhamento = models.IntegerField(default=1, verbose_name="Empilhamento Máximo")
+
+    def __str__(self):
+        return f"{self.sku} - {self.descricao}"
+    
     # Validade
     shelf_life_dias = models.IntegerField(default=0, verbose_name="Shelf Life (Dias)")
     

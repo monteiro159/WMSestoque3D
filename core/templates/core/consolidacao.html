@@ -3,11 +3,18 @@
 {% block content %}
 <div class="p-4 max-w-6xl mx-auto">
     
-    <div class="mb-6">
-        <h1 class="text-2xl font-bold text-slate-100 flex items-center gap-2">
-            <i class="fa-solid fa-people-carry-box text-purple-500"></i> Otimização de Espaço
-        </h1>
-        <p class="text-slate-400 text-sm">Consolidação inteligente para defragmentar o estoque.</p>
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-people-carry-box text-purple-500"></i> Otimização de Espaço
+            </h1>
+            <p class="text-slate-400 text-sm">Consolidação inteligente (Considerando Empilhamento Real).</p>
+        </div>
+
+        <a href="{% url 'relatorio_otimizacao' %}" target="_blank" class="bg-slate-700 hover:bg-white hover:text-slate-900 text-white border border-slate-600 px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 shadow-lg group">
+            <i class="fa-solid fa-print group-hover:scale-110 transition-transform"></i>
+            <span>Imprimir Ordem</span>
+        </a>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -123,9 +130,14 @@
                             </div>
                         </div>
                     </div>
-                    <span class="bg-emerald-500/10 text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/20 font-bold">
-                        <i class="fa-solid fa-star mr-1"></i> {{ s.ganho }}
-                    </span>
+                    <div class="flex gap-2">
+                        <span class="bg-blue-500/10 text-blue-400 text-xs px-3 py-1 rounded-full border border-blue-500/20 font-bold">
+                            <i class="fa-solid fa-layer-group mr-1"></i> {{ s.motivo }}
+                        </span>
+                        <span class="bg-emerald-500/10 text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/20 font-bold">
+                            <i class="fa-solid fa-star mr-1"></i> {{ s.ganho }}
+                        </span>
+                    </div>
                 </div>
 
                 <div class="p-6 grid grid-cols-1 md:grid-cols-7 gap-4 items-center relative">
@@ -174,7 +186,7 @@
                         </form>
 
                         <span class="mt-2 bg-slate-800 text-slate-300 text-[10px] font-bold px-3 py-1 rounded-full border border-slate-600 shadow-sm">
-                            MOVER {{ s.qtd_mover }}
+                            MOVER {{ s.qtd_mover|floatformat:1 }}
                         </span>
                     </div>
 
@@ -205,31 +217,32 @@
         </div>
     {% endif %}
 </div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const botoes = document.querySelectorAll('.btn-desfazer');
 
         botoes.forEach(btn => {
             btn.addEventListener('click', function(e) {
-                e.preventDefault(); // Impede o envio imediato
+                e.preventDefault(); 
                 
-                const form = this.closest('form'); // Pega o formulário pai
+                const form = this.closest('form'); 
 
                 Swal.fire({
                     title: 'Tem certeza?',
                     text: "O produto voltará para a Rua de Origem e sairá do Destino.",
                     icon: 'warning',
                     showCancelButton: true,
-                    confirmButtonColor: '#e11d48', // Vermelho Rose
-                    cancelButtonColor: '#64748b', // Cinza Slate
+                    confirmButtonColor: '#e11d48', 
+                    cancelButtonColor: '#64748b', 
                     confirmButtonText: 'Sim, desfazer!',
                     cancelButtonText: 'Cancelar',
-                    background: '#1e293b', // Fundo Escuro (Slate-800)
-                    color: '#f8fafc', // Texto Claro
-                    iconColor: '#fbbf24' // Ícone Amarelo
+                    background: '#1e293b', 
+                    color: '#f8fafc', 
+                    iconColor: '#fbbf24' 
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        form.submit(); // Envia o formulário se confirmar
+                        form.submit(); 
                     }
                 });
             });

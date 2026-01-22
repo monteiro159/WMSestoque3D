@@ -430,32 +430,34 @@ def picking_busca(request):
         'clientes': lista_clientes,
         'cliente_selecionado': cliente_selecionado
     })
-
 # =============================================================================
 # 5. OTIMIZAÇÃO
 # =============================================================================
-def sugestao_consolidacao(request):
-    # 1. Validações Iniciais
+# =============================================================================
+# 4. OTIMIZAÇÃO E CONSOLIDAÇÃO (LÓGICA CENTRALIZADA E CORRIGIDA)
+# =============================================================================
+
+def _calcular_otimizacao():
+    """
+    Função auxiliar que faz os cálculos matemáticos.
+    Retorna os dados prontos para a Tela e para o Relatório.
+    """
+    # 1. Validações
     ultimo_registro = InventarioDiario.objects.order_by('-data_referencia').first()
     if not ultimo_registro:
-        return render(request, 'core/consolidacao.html', {
-            'sugestoes': [], 'qtd_oportunidades': 0, 'ganho_ruas': 0, 'pct_otimizacao': 0
-        })
+        return {'sugestoes': [], 'qtd': 0, 'pct': 0, 'ocupadas': 0, 'data_ref': date.today()}
         
     data_ref = ultimo_registro.data_referencia
     estoque = InventarioDiario.objects.filter(data_referencia=data_ref).select_related('rua')
     
-    # 2. Mapa de Ocupação Atual (Ocupação Física no Chão)
+    # 2. Mapa de Ocupação Atual
     mapa_ocupacao = {}
     for item in estoque:
         rid = item.rua.pk
-        mapa_ocupacao[rid] = mapa_ocupacao.get(rid, 0) + item.quantidade_paletes
+        mapa_ocupacao[rid] = mapa_ocupacao.get(rid, 0.0) + float(item.quantidade_paletes)
 
-    # 3. Carrega Dados de Empilhamento dos Produtos (Para evitar N+1 queries)
-    # Cria um dicionário: {'SKU123': 3, 'SKU456': 2}
     mapa_empilhamento = {p.sku: p.empilhamento for p in Produto.objects.all()}
 
-    # 4. Agrupamento por SKU + Validade
     grupos = {}
     for item in estoque:
         data_val = item.data_validade.strftime('%Y-%m-%d') if item.data_validade else 'ND'
@@ -466,11 +468,10 @@ def sugestao_consolidacao(request):
     sugestoes = []
     ruas_envolvidas = set()
 
-    # 5. Algoritmo de Consolidação
+    # 3. Algoritmo
     for chave, itens_brutos in grupos.items():
         if len(itens_brutos) < 2: continue
 
-        # Agrupa itens que já estão na mesma rua (para somar qtd)
         itens_por_rua = {}
         for item in itens_brutos:
             nome_rua = str(item.rua.rua).strip()
@@ -482,11 +483,8 @@ def sugestao_consolidacao(request):
         itens = list(itens_por_rua.values())
         sku, data_val = chave.split('|')
         descricao_produto = itens[0].descricao
-        
-        # Pega o empilhamento do produto (Padrão 1 se não achar)
         stacking = mapa_empilhamento.get(sku, 1)
 
-        # Ordena: Tenta esvaziar quem tem menos primeiro
         itens.sort(key=lambda x: x.quantidade_paletes)
 
         for i in range(len(itens)):
@@ -501,71 +499,86 @@ def sugestao_consolidacao(request):
                 if destino.rua.pk in ruas_envolvidas: continue
                 if str(origem.rua.rua).strip() == str(destino.rua.rua).strip(): continue
 
-                # === CÁLCULO DA CAPACIDADE DINÂMICA ===
+                # Cálculo de Capacidade
                 rua_obj = destino.rua
-                
-                # Base da rua (Footprint)
                 base = rua_obj.base_footprint
-                
-                # Lógica de Segurança:
-                # Se a base for <= 1 (configuração antiga/inválida), usamos a cap_maxima fixa como fallback.
-                # Se a base estiver certa (ex: 42), multiplicamos pelo empilhamento do produto.
-                if base > 1:
-                    cap_real = base * stacking
-                else:
-                    cap_real = rua_obj.cap_maxima
+                cap_real = (base * stacking) if base > 1 else rua_obj.cap_maxima
 
-                ocupacao_destino = mapa_ocupacao.get(destino.rua.pk, 0)
+                ocupacao_destino = mapa_ocupacao.get(destino.rua.pk, 0.0)
                 espaco_livre = cap_real - ocupacao_destino
                 
-                # Verifica se cabe (com margem de segurança de 0.1 para flutuação)
-                if espaco_livre >= (origem.quantidade_paletes - 0.1):
-                    destino_antes = int(ocupacao_destino)
-                    destino_depois = int(ocupacao_destino + origem.quantidade_paletes)
-                    
+                qtd_mover = float(origem.quantidade_paletes)
+
+                if espaco_livre >= (qtd_mover - 0.1):
+                    # === CORREÇÃO DOS NÚMEROS AQUI ===
+                    dest_antes = int(ocupacao_destino)
+                    dest_depois = int(ocupacao_destino + qtd_mover)
+                    cap_dest = int(cap_real)
+
                     sugestoes.append({
                         'produto': descricao_produto,
                         'sku': sku,
                         'validade': data_val,
-                        'qtd_mover': float(origem.quantidade_paletes), # Garante float
+                        'qtd_mover': qtd_mover,
                         'origem_rua': origem.rua.rua,
-                        'origem_gp': origem.rua.gp,
                         'destino_rua': destino.rua.rua,
+                        'origem_gp': origem.rua.gp,
                         'destino_gp': destino.rua.gp,
                         'origem_rua_id': origem.rua.pk,
                         'destino_rua_id': destino.rua.pk,
-                        'destino_cap': int(cap_real), # Mostra a capacidade REAL para este produto
-                        'destino_antes': destino_antes,
-                        'destino_depois': destino_depois,
+                        
+                        # CHAVES PARA O HTML (Tela e PDF)
+                        'destino_cap': cap_dest,
+                        'destino_antes': dest_antes,
+                        'destino_depois': dest_depois,
+                        
                         'ganho': f"Esvazia Rua {origem.rua.rua}",
-                        'motivo': f"Stack: {stacking}x" # Info extra visual
+                        'motivo': f"Stack: {stacking}x"
                     })
                     
-                    # Atualiza simulação de ocupação
-                    mapa_ocupacao[destino.rua.pk] += origem.quantidade_paletes 
-                    mapa_ocupacao[origem.rua.pk] -= origem.quantidade_paletes 
-                    
-                    # Marca ruas como usadas nesta rodada para evitar conflito
+                    mapa_ocupacao[destino.rua.pk] += qtd_mover 
+                    mapa_ocupacao[origem.rua.pk] -= qtd_mover 
                     ruas_envolvidas.add(origem.rua.pk)
                     ruas_envolvidas.add(destino.rua.pk)
                     break 
 
-    # 6. Finalização e Contexto
-    qtd_sugestoes = len(sugestoes)
-    total_ruas_ocupadas = estoque.values('rua').distinct().count()
-    pct_otimizacao = 0
-    if total_ruas_ocupadas > 0:
-        pct_otimizacao = (qtd_sugestoes / total_ruas_ocupadas) * 100
-
-    movimentos_feitos = request.session.get('movimentos_feitos', [])
-
-    return render(request, 'core/consolidacao.html', {
+    # 4. Totais
+    total_ocupadas = estoque.values('rua').distinct().count()
+    pct = (len(sugestoes) / total_ocupadas * 100) if total_ocupadas > 0 else 0
+    
+    return {
         'sugestoes': sugestoes,
-        'qtd_oportunidades': qtd_sugestoes,
-        'ganho_ruas': qtd_sugestoes,
-        'pct_otimizacao': pct_otimizacao,
-        'total_ocupadas': total_ruas_ocupadas,
+        'qtd': len(sugestoes),
+        'pct': pct,
+        'ocupadas': total_ocupadas,
+        'data_ref': data_ref
+    }
+
+# --- VIEW 1: A TELA DO SITE ---
+def sugestao_consolidacao(request):
+    dados = _calcular_otimizacao()
+    movimentos_feitos = request.session.get('movimentos_feitos', [])
+    
+    return render(request, 'core/consolidacao.html', {
+        'sugestoes': dados['sugestoes'],
+        'qtd_oportunidades': dados['qtd'],
+        'ganho_ruas': dados['qtd'],
+        'pct_otimizacao': dados['pct'],
+        'total_ocupadas': dados['ocupadas'],
         'movimentos_feitos': movimentos_feitos
+    })
+
+# --- VIEW 2: O RELATÓRIO PDF (ESSA ESTAVA FALTANDO) ---
+def relatorio_otimizacao(request):
+    dados = _calcular_otimizacao()
+    # Adicionamos datetime para mostrar hora da impressão
+    from datetime import datetime
+    
+    return render(request, 'core/relatorio_otimizacao.html', {
+        'sugestoes': dados['sugestoes'],
+        'qtd': dados['qtd'],
+        'data_ref': dados['data_ref'],
+        'agora': datetime.now()
     })
 # =============================================================================
 # 6. AÇÃO: REALIZAR MOVIMENTAÇÃO

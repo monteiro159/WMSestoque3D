@@ -21,7 +21,8 @@ urlpatterns = [
     # === OTIMIZAÇÃO / CONSOLIDAÇÃO ===
     path('consolidacao/', views.sugestao_consolidacao, name='consolidacao'),
     
-    # CORREÇÃO AQUI: O 'name' mudou de 'confirmar_consolidacao' para 'realizar_consolidacao'
+    path('consolidacao/imprimir/', views.relatorio_otimizacao, name='relatorio_otimizacao'),
+    
     # para bater com o código que está no HTML ({% url 'realizar_consolidacao' %})
     path('consolidacao/realizar/', views.realizar_consolidacao, name='realizar_consolidacao'),
     

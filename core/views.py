@@ -3,7 +3,9 @@ from django.contrib import messages
 from django.db.models import Sum, Q, Count, Max, Min
 from datetime import date, datetime
 import pandas as pd
-import unicodedata  # <--- O IMPORT QUE FALTAVA ESTÁ AQUI!
+import unicodedata
+import json
+from django.core.serializers.json import DjangoJSONEncoder
 
 from .models import LayoutArmazem, InventarioDiario, Produto, Cliente
 
@@ -24,6 +26,8 @@ def dashboard_armazem(request, galpao_id=None):
     # 2. Filtros URL
     q_produto = request.GET.get('produto', '').strip()
     q_status = request.GET.get('status', '').strip()
+    q_categoria = request.GET.get('categoria', '').strip()
+
     if q_produto: itens = itens.filter(descricao__icontains=q_produto)
 
     # 3. Carrega Mestre
@@ -33,8 +37,8 @@ def dashboard_armazem(request, galpao_id=None):
     stats = {
         'PA':     {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1},
         'INSUMO': {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1},
-        'RPM':    {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1}, # Caixas/Garrafas
-        'PBR':    {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1}, # Paletes Físicos
+        'RPM':    {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1},
+        'PBR':    {'vol': 0.0, 'maior_item': None, 'maior_qtd': -1},
     }
     
     transitorio = {'vol': 0.0}
@@ -45,63 +49,62 @@ def dashboard_armazem(request, galpao_id=None):
         sku = str(item.sku).strip()
         desc = item.descricao.upper()
         
-        # A. DEFINIÇÃO DA CATEGORIA BASE (PA, INSUMO, RPM)
+        # A. CATEGORIA
         tipo = mapa_tipos.get(sku)
-        
-        # Correções de Segurança (Dados sujos no nome)
-        if 'SEM GARRAFA' in desc or 'VASILHAME' in desc or 'CASCO' in desc:
-            tipo = 'RPM'
-        
+        if 'SEM GARRAFA' in desc or 'VASILHAME' in desc or 'CASCO' in desc: tipo = 'RPM'
         if not tipo:
-            # Fallback se não tiver no cadastro
             if desc.startswith('PLT') or 'CHAPATEX' in desc: tipo = 'RPM'
             elif 'BULK' in desc or 'LATA' in desc: tipo = 'INSUMO'
             else: tipo = 'PA'
 
-        # B. SEPARAÇÃO FINA: RPM (Caixa) vs PBR (Palete)
-        # O problema do Heineken "unpbr" acontecia aqui. Vamos ser restritos.
-        
+        # B. PBR vs RPM
         categoria_final = tipo
-        
-        # Lista estrita de coisas que são ESTRUTURA (Card Roxo)
         eh_estrutura = False
         if 'PLT PBR' in desc or 'PALETE PBR' in desc or 'CHAPATEX' in desc or desc.startswith('PBR'):
             eh_estrutura = True
         
-        # Lógica de Decisão
-        if eh_estrutura:
-            categoria_final = 'PBR'
-        elif tipo == 'RPM':
-            # Se é RPM mas não é estrutura (ex: caixa plástica, garrafa solta) -> Vai para Card RPM
-            categoria_final = 'RPM'
-        elif tipo == 'PA':
-            # Se é PA, garante que fica em PA (não deixa cair em PBR por engano de string)
-            categoria_final = 'PA'
-            
-        # Garante que a chave existe
+        if eh_estrutura: categoria_final = 'PBR'
+        elif tipo == 'RPM': categoria_final = 'RPM'
+        elif tipo == 'PA': categoria_final = 'PA'
         if categoria_final not in stats: categoria_final = 'PA'
 
-        # C. CÁLCULO DE VOLUME
+        # C. VOLUME
         qtd_inteira = int(item.quantidade_paletes)
-        
-        if categoria_final == 'PBR':
-            # Paletes contam por Posição
-            volume = item.quantidade_paletes
-        else:
-            # PA, INSUMO e RPM (Caixas) contam por Unidade de Venda
-            volume = qtd_inteira + item.fracao
+        if categoria_final == 'PBR': volume = item.quantidade_paletes
+        else: volume = qtd_inteira + item.fracao
 
-        # D. POPULA ESTATÍSTICAS
         stats[categoria_final]['vol'] += volume
         if volume > stats[categoria_final]['maior_qtd']:
             stats[categoria_final]['maior_qtd'] = volume
             stats[categoria_final]['maior_item'] = item
             
-        # E. MAPA
+        # D. DADOS DA RUA
         rid = item.rua.id
-        if rid not in ocupacao_por_rua: ocupacao_por_rua[rid] = {'qtd': 0.0, 'produtos': set()}
+        if rid not in ocupacao_por_rua: 
+            ocupacao_por_rua[rid] = {
+                'qtd': 0.0, 
+                'produtos': set(), 
+                'categorias': set(),
+                'detalhes': [] 
+            }
+        
         ocupacao_por_rua[rid]['qtd'] += item.quantidade_paletes
         ocupacao_por_rua[rid]['produtos'].add(item.descricao)
+        ocupacao_por_rua[rid]['categorias'].add(categoria_final)
+
+        validade_fmt = item.data_validade.strftime('%d/%m/%Y') if item.data_validade else '-'
+        producao_fmt = item.data_producao.strftime('%d/%m/%Y') if item.data_producao else '-'
+        status_real = str(item.status).upper().strip() if item.status else 'ESTOQUE'
+
+        ocupacao_por_rua[rid]['detalhes'].append({
+            'sku': sku,
+            'produto': desc,
+            'qtd': float(item.quantidade_paletes),
+            'lote': item.lote if item.lote else '-',
+            'validade': validade_fmt,
+            'producao': producao_fmt,
+            'status': status_real
+        })
 
         if any(l in item.rua.rua.upper() for l in locais_transitorio):
             transitorio['vol'] += volume
@@ -112,14 +115,31 @@ def dashboard_armazem(request, galpao_id=None):
     lista_galpoes = LayoutArmazem.objects.values_list('gp', flat=True).distinct().order_by('gp')
 
     mapa_visual = []
+    status_qualidade = ['ESTOQUE', 'BLOQUEADO', 'DESCARTE']
+
     for r in ruas_query:
         if any(l in r.rua.upper() for l in locais_transitorio): continue
         
-        dados = ocupacao_por_rua.get(r.id, {'qtd': 0.0, 'produtos': []})
+        dados = ocupacao_por_rua.get(r.id, {'qtd': 0.0, 'produtos': [], 'categorias': set(), 'detalhes': []})
+        
+        # --- FILTRO 1: CATEGORIA ---
+        if q_categoria and q_categoria not in dados['categorias']:
+            continue
+
+        # --- FILTRO 2: QUALIDADE ---
+        if q_status in status_qualidade:
+            tem_status = False
+            for d in dados['detalhes']:
+                if q_status in d['status']: 
+                    tem_status = True
+                    break
+            if not tem_status: continue
+
         ocupado = dados['qtd']
         pct = (ocupado / r.cap_maxima * 100) if r.cap_maxima > 0 else 0
         if pct > 100: pct = 100
 
+        # Cores
         if ocupado <= 0:
             cor_bg = 'border-slate-800 bg-slate-900/50' 
             cor_bar = 'bg-slate-700'
@@ -138,17 +158,26 @@ def dashboard_armazem(request, galpao_id=None):
             cor_texto = 'text-emerald-400'
 
         mostrar = True
+        
+        # --- FILTRO 3: OCUPAÇÃO E MISTO (NOVO!) ---
         if q_status == 'vazia' and ocupado > 0: mostrar = False
         if q_status == 'cheia' and pct < 85: mostrar = False
+        
+        # Se escolheu "misto", só mostra se tiver 2 ou mais produtos diferentes
+        if q_status == 'misto' and len(dados['produtos']) < 2: mostrar = False
 
         if mostrar:
             prod_nome = list(dados['produtos'])[0] if dados['produtos'] else "-"
             if len(dados['produtos']) > 1: prod_nome = "MISTO"
+            
+            json_detalhes = json.dumps(dados['detalhes'], cls=DjangoJSONEncoder)
+            
             mapa_visual.append({
                 'id': r.id, 'codigo': r.rua, 'gp': r.gp,
                 'produto': prod_nome.title(), 'ocupacao': f"{ocupado:.1f}", 
                 'capacidade': int(r.cap_maxima), 'porcentagem': int(pct),
-                'cor_bg': cor_bg, 'cor_bar': cor_bar, 'cor_texto': cor_texto
+                'cor_bg': cor_bg, 'cor_bar': cor_bar, 'cor_texto': cor_texto,
+                'json_detalhes': json_detalhes
             })
 
     return render(request, 'core/dashboard.html', {
@@ -156,7 +185,8 @@ def dashboard_armazem(request, galpao_id=None):
         'galpao': galpao_id if galpao_id else 0,
         'titulo_galpao': f"Galpão {galpao_id}" if galpao_id else "Visão Global",
         'data_ref': data_hoje, 'stats': stats, 'transitorio': transitorio,
-        'filtro_produto': q_produto, 'filtro_status': q_status
+        'filtro_produto': q_produto, 'filtro_status': q_status,
+        'filtro_categoria': q_categoria
     })
 # =============================================================================
 # 2. UPLOAD DE EXCEL
